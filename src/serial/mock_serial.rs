@@ -2,10 +2,19 @@ use crate::serial::traits::ReadWrite;
 use std::io::{Read, Write};
 
 #[cfg(test)]
-struct MockReadWrite<'a> {
+pub struct MockReadWrite<'a> {
     read_buf: Vec<&'a [u8]>,
     pub write_buf: Vec<u8>,
     pointer: usize,
+}
+
+#[cfg(test)]
+pub fn new_mock<'a>(data: Vec<&'a [u8]>) -> MockReadWrite<'a> {
+    MockReadWrite {
+        read_buf: data,
+        write_buf: Vec::new(),
+        pointer: 0,
+    }
 }
 
 #[cfg(test)]
@@ -53,14 +62,6 @@ impl<'a> ReadWrite for MockReadWrite<'a> {}
 #[cfg(test)]
 mod test {
     use super::*;
-
-    fn new_mock<'a>(data: Vec<&'a [u8]>) -> MockReadWrite<'a> {
-        MockReadWrite {
-            read_buf: data,
-            write_buf: Vec::new(),
-            pointer: 0,
-        }
-    }
 
     mod read_test {
         use super::*;
