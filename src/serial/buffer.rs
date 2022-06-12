@@ -37,11 +37,6 @@ pub fn new(buf_size: usize) -> Buffer {
 }
 
 impl Buffer {
-    #[inline]
-    pub fn size(&self) -> usize {
-        self.data.len()
-    }
-
     pub fn has_left(&self) -> bool {
         self.pointer < self.end
     }
@@ -86,15 +81,6 @@ impl Buffer {
 #[cfg(test)]
 mod test {
     use super::*;
-
-    mod size_test {
-        use super::*;
-        #[test]
-        fn size_equal_specified() {
-            let b = new(128);
-            assert_eq!(128, b.size());
-        }
-    }
 
     mod fill_test {
         use super::*;
