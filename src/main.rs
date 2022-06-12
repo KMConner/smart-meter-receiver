@@ -1,3 +1,20 @@
+mod serial;
+use serial::Connection;
+
 fn main() {
-    println!("Hello, world!");
+    let mut conn = serial::new("/dev/ttyS0", 115200).unwrap();
+    let line = String::from("SKVER");
+    conn.write_line(&line).unwrap();
+
+    let l: String = conn.read_line().unwrap();
+    println!("{:?}", l);
+
+    let l = conn.read_line().unwrap();
+    println!("{:?}", l);
+
+    let l = conn.read_line().unwrap();
+    println!("{:?}", l);
+
+    let l = conn.read_line().unwrap();
+    println!("{:?}", l);
 }
