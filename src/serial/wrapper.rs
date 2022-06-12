@@ -24,6 +24,8 @@ impl Write for Wrapper {
     }
 }
 
-pub fn new(conn: Box<dyn SerialPort>) -> Wrapper {
-    Wrapper { port: conn }
+impl Wrapper {
+    pub fn new(conn: Box<dyn SerialPort>) -> Wrapper {
+        Wrapper { port: conn }
+    }
 }

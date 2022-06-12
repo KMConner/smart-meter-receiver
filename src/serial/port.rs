@@ -1,7 +1,8 @@
 use super::traits::ReadWrite;
-use crate::serial::errors::Result;
-use crate::serial::Connection;
 use crate::serial::buffer::Buffer;
+use crate::serial::errors::Result;
+use crate::serial::wrapper::Wrapper;
+use crate::serial::Connection;
 use std::time::Duration;
 
 struct ConnectionImpl<T: ReadWrite> {
@@ -61,7 +62,7 @@ pub fn new(path: &str, baud_rate: u32) -> Result<impl Connection> {
         .open()?;
 
     Ok(ConnectionImpl {
-        connection: crate::serial::wrapper::new(connection),
+        connection: Wrapper::new(connection),
         read_buffer: Buffer::new(128),
     })
 }
