@@ -10,6 +10,9 @@ pub enum Error {
 
     #[error(transparent)]
     Utf8Error(#[from] std::string::FromUtf8Error),
+
+    #[error("unknown error")]
+    UnknownError(String),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
