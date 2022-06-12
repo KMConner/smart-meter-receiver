@@ -1,3 +1,4 @@
+use crate::serial::Error as SerialError;
 use std::io::Read;
 use thiserror::Error as ThisError;
 
@@ -8,6 +9,17 @@ pub enum BufError {
 
     #[error("this buffer has data left")]
     DataLeftError,
+}
+
+impl From<BufError> for SerialError {
+    fn from(err: BufError) -> Self {
+        match err {
+            BufError::IoError(e) => SerialError::IoError(e),
+            BufError::DataLeftError => {
+                SerialError::UnknownError(String::from("this buffer has data left"))
+            }
+        }
+    }
 }
 
 pub struct Buffer {
@@ -189,6 +201,21 @@ mod test {
 
             assert_eq!(b"abc\r\n", b.read_to_lf().unwrap());
             assert_eq!(5, b.pointer);
+
+            assert_eq!(true, b.read_to_lf().is_none());
+        }
+
+        #[test]
+        fn consequtive_cr_lf() {
+            let mut b = new(16);
+            let mut m = mock_serial::new_mock(vec![b"abc\r\n\r\n"]);
+            b.fill_buf(&mut m).unwrap();
+
+            assert_eq!(b"abc\r\n", b.read_to_lf().unwrap());
+            assert_eq!(5, b.pointer);
+
+            assert_eq!(b"\r\n", b.read_to_lf().unwrap());
+            assert_eq!(7, b.pointer);
 
             assert_eq!(true, b.read_to_lf().is_none());
         }
