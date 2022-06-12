@@ -10,4 +10,6 @@ impl WiSunCLient {
             serial_connection: serial_connection,
         }
     }
+
+    fn ensure_echoback_off() -> Result<()> {}
 }
