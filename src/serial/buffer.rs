@@ -28,15 +28,15 @@ pub struct Buffer {
     pub(self) end: usize,
 }
 
-pub fn new(buf_size: usize) -> Buffer {
-    Buffer {
-        data: vec![0u8; buf_size],
-        pointer: 0,
-        end: 0,
-    }
-}
-
 impl Buffer {
+    pub fn new(buf_size: usize) -> Buffer {
+        Buffer {
+            data: vec![0u8; buf_size],
+            pointer: 0,
+            end: 0,
+        }
+    }
+
     pub fn has_left(&self) -> bool {
         self.pointer < self.end
     }
@@ -88,7 +88,7 @@ mod test {
 
         #[test]
         fn read_empty() {
-            let mut b = new(16);
+            let mut b = Buffer::new(16);
             let mut m = MockReadWrite::new(Vec::new());
             let result = b.fill_buf(&mut m).unwrap();
             assert_eq!(0, result);
@@ -98,7 +98,7 @@ mod test {
 
         #[test]
         fn read_once() {
-            let mut b = new(8);
+            let mut b = Buffer::new(8);
             let mut m = MockReadWrite::new(vec![b"abcd", b"egfh"]);
             let result = b.fill_buf(&mut m).unwrap();
             assert_eq!(4, result);
@@ -109,7 +109,7 @@ mod test {
 
         #[test]
         fn error_read_when_data_left() {
-            let mut b = new(8);
+            let mut b = Buffer::new(8);
             let mut m = MockReadWrite::new(vec![b"abcd", b"egfh"]);
 
             let result = b.fill_buf(&mut m).unwrap();
@@ -129,13 +129,13 @@ mod test {
 
         #[test]
         fn none_when_empty() {
-            let mut b = new(8);
+            let mut b = Buffer::new(8);
             assert_eq!(true, b.read_to_lf().is_none());
         }
 
         #[test]
         fn none_without_lf() {
-            let mut b = new(8);
+            let mut b = Buffer::new(8);
             let mut m = MockReadWrite::new(vec![b"abcdegfh"]);
             b.fill_buf(&mut m).unwrap();
 
@@ -144,7 +144,7 @@ mod test {
 
         #[test]
         fn read_once() {
-            let mut b = new(16);
+            let mut b = Buffer::new(16);
             let mut m = MockReadWrite::new(vec![b"abc\r\ndegf\r\nh\r\n"]);
             b.fill_buf(&mut m).unwrap();
 
@@ -153,7 +153,7 @@ mod test {
 
         #[test]
         fn read_multiple() {
-            let mut b = new(16);
+            let mut b = Buffer::new(16);
             let mut m = MockReadWrite::new(vec![b"abc\r\ndefg\r\nijkl"]);
             b.fill_buf(&mut m).unwrap();
             assert_eq!(15, b.end);
@@ -167,7 +167,7 @@ mod test {
 
         #[test]
         fn read_ends_with_lf() {
-            let mut b = new(16);
+            let mut b = Buffer::new(16);
             let mut m = MockReadWrite::new(vec![b"abc\r\ndefg\r\nij\r\n"]);
             b.fill_buf(&mut m).unwrap();
 
@@ -181,7 +181,7 @@ mod test {
 
         #[test]
         fn none_after_read_all() {
-            let mut b = new(16);
+            let mut b = Buffer::new(16);
             let mut m = MockReadWrite::new(vec![b"abc\r\n"]);
             b.fill_buf(&mut m).unwrap();
 
@@ -193,7 +193,7 @@ mod test {
 
         #[test]
         fn consequtive_cr_lf() {
-            let mut b = new(16);
+            let mut b = Buffer::new(16);
             let mut m = MockReadWrite::new(vec![b"abc\r\n\r\n"]);
             b.fill_buf(&mut m).unwrap();
 
@@ -208,7 +208,7 @@ mod test {
 
         #[test]
         fn fill_multiple() {
-            let mut b = new(16);
+            let mut b = Buffer::new(16);
             let mut m = MockReadWrite::new(vec![b"abc\r\ndef\r\n"]);
             b.fill_buf(&mut m).unwrap();
 
@@ -236,13 +236,13 @@ mod test {
 
         #[test]
         fn none_when_empty() {
-            let mut b = new(8);
+            let mut b = Buffer::new(8);
             assert_eq!(true, b.get_remain().is_none());
         }
 
         #[test]
         fn none_after_read_all() {
-            let mut b = new(16);
+            let mut b = Buffer::new(16);
             let mut m = MockReadWrite::new(vec![b"abc\r\n"]);
             b.fill_buf(&mut m).unwrap();
 
@@ -254,7 +254,7 @@ mod test {
 
         #[test]
         fn rest_all() {
-            let mut b = new(16);
+            let mut b = Buffer::new(16);
             let mut m = MockReadWrite::new(vec![b"abc\r\n"]);
             b.fill_buf(&mut m).unwrap();
 
@@ -264,7 +264,7 @@ mod test {
 
         #[test]
         fn rest_all_after_read_to_lf() {
-            let mut b = new(16);
+            let mut b = Buffer::new(16);
             let mut m = MockReadWrite::new(vec![b"abc\r\ndef"]);
             b.fill_buf(&mut m).unwrap();
 
@@ -277,7 +277,7 @@ mod test {
 
         #[test]
         fn none_after_read_to_lf_all() {
-            let mut b = new(16);
+            let mut b = Buffer::new(16);
             let mut m = MockReadWrite::new(vec![b"abc\r\ndef\r\n"]);
             b.fill_buf(&mut m).unwrap();
 
