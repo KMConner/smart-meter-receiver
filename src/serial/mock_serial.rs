@@ -1,4 +1,7 @@
+#[cfg(test)]
 use crate::serial::traits::ReadWrite;
+
+#[cfg(test)]
 use std::io::{Read, Write};
 
 #[cfg(test)]
