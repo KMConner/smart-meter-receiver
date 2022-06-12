@@ -69,13 +69,13 @@ pub fn new(path: &str, baud_rate: u32) -> Result<impl Connection> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::serial::mock_serial::{new_mock, MockReadWrite};
+    use crate::serial::mock_serial::MockReadWrite;
 
     fn new_conn<'a>(
         buf_size: usize,
         read_data: Vec<&'a [u8]>,
     ) -> ConnectionImpl<MockReadWrite<'a>> {
-        let mock = new_mock(read_data);
+        let mock = MockReadWrite::new(read_data);
 
         ConnectionImpl {
             connection: mock,

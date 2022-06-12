@@ -84,12 +84,12 @@ mod test {
 
     mod fill_test {
         use super::*;
-        use crate::serial::mock_serial;
+        use crate::serial::mock_serial::MockReadWrite;
 
         #[test]
         fn read_empty() {
             let mut b = new(16);
-            let mut m = mock_serial::new_mock(Vec::new());
+            let mut m = MockReadWrite::new(Vec::new());
             let result = b.fill_buf(&mut m).unwrap();
             assert_eq!(0, result);
             assert_eq!(0, b.pointer);
@@ -99,7 +99,7 @@ mod test {
         #[test]
         fn read_once() {
             let mut b = new(8);
-            let mut m = mock_serial::new_mock(vec![b"abcd", b"egfh"]);
+            let mut m = MockReadWrite::new(vec![b"abcd", b"egfh"]);
             let result = b.fill_buf(&mut m).unwrap();
             assert_eq!(4, result);
             assert_eq!(0, b.pointer);
@@ -110,7 +110,7 @@ mod test {
         #[test]
         fn error_read_when_data_left() {
             let mut b = new(8);
-            let mut m = mock_serial::new_mock(vec![b"abcd", b"egfh"]);
+            let mut m = MockReadWrite::new(vec![b"abcd", b"egfh"]);
 
             let result = b.fill_buf(&mut m).unwrap();
             assert_eq!(4, result);
@@ -125,7 +125,7 @@ mod test {
 
     mod read_to_lf_test {
         use super::*;
-        use crate::serial::mock_serial;
+        use crate::serial::mock_serial::MockReadWrite;
 
         #[test]
         fn none_when_empty() {
@@ -136,7 +136,7 @@ mod test {
         #[test]
         fn none_without_lf() {
             let mut b = new(8);
-            let mut m = mock_serial::new_mock(vec![b"abcdegfh"]);
+            let mut m = MockReadWrite::new(vec![b"abcdegfh"]);
             b.fill_buf(&mut m).unwrap();
 
             assert_eq!(true, b.read_to_lf().is_none());
@@ -145,7 +145,7 @@ mod test {
         #[test]
         fn read_once() {
             let mut b = new(16);
-            let mut m = mock_serial::new_mock(vec![b"abc\r\ndegf\r\nh\r\n"]);
+            let mut m = MockReadWrite::new(vec![b"abc\r\ndegf\r\nh\r\n"]);
             b.fill_buf(&mut m).unwrap();
 
             assert_eq!(b"abc\r\n", b.read_to_lf().unwrap());
@@ -154,7 +154,7 @@ mod test {
         #[test]
         fn read_multiple() {
             let mut b = new(16);
-            let mut m = mock_serial::new_mock(vec![b"abc\r\ndefg\r\nijkl"]);
+            let mut m = MockReadWrite::new(vec![b"abc\r\ndefg\r\nijkl"]);
             b.fill_buf(&mut m).unwrap();
             assert_eq!(15, b.end);
 
@@ -168,7 +168,7 @@ mod test {
         #[test]
         fn read_ends_with_lf() {
             let mut b = new(16);
-            let mut m = mock_serial::new_mock(vec![b"abc\r\ndefg\r\nij\r\n"]);
+            let mut m = MockReadWrite::new(vec![b"abc\r\ndefg\r\nij\r\n"]);
             b.fill_buf(&mut m).unwrap();
 
             assert_eq!(b"abc\r\n", b.read_to_lf().unwrap());
@@ -182,7 +182,7 @@ mod test {
         #[test]
         fn none_after_read_all() {
             let mut b = new(16);
-            let mut m = mock_serial::new_mock(vec![b"abc\r\n"]);
+            let mut m = MockReadWrite::new(vec![b"abc\r\n"]);
             b.fill_buf(&mut m).unwrap();
 
             assert_eq!(b"abc\r\n", b.read_to_lf().unwrap());
@@ -194,7 +194,7 @@ mod test {
         #[test]
         fn consequtive_cr_lf() {
             let mut b = new(16);
-            let mut m = mock_serial::new_mock(vec![b"abc\r\n\r\n"]);
+            let mut m = MockReadWrite::new(vec![b"abc\r\n\r\n"]);
             b.fill_buf(&mut m).unwrap();
 
             assert_eq!(b"abc\r\n", b.read_to_lf().unwrap());
@@ -209,7 +209,7 @@ mod test {
         #[test]
         fn fill_multiple() {
             let mut b = new(16);
-            let mut m = mock_serial::new_mock(vec![b"abc\r\ndef\r\n"]);
+            let mut m = MockReadWrite::new(vec![b"abc\r\ndef\r\n"]);
             b.fill_buf(&mut m).unwrap();
 
             assert_eq!(b"abc\r\n", b.read_to_lf().unwrap());
@@ -220,7 +220,7 @@ mod test {
 
             assert_eq!(true, b.read_to_lf().is_none());
 
-            let mut m = mock_serial::new_mock(vec![b"123\r\n"]);
+            let mut m = MockReadWrite::new(vec![b"123\r\n"]);
             b.fill_buf(&mut m).unwrap();
             assert_eq!(b"123\r\n", b.read_to_lf().unwrap());
             assert_eq!(5, b.pointer);
@@ -232,7 +232,7 @@ mod test {
     mod get_remain_test {
 
         use super::*;
-        use crate::serial::mock_serial;
+        use crate::serial::mock_serial::MockReadWrite;
 
         #[test]
         fn none_when_empty() {
@@ -243,7 +243,7 @@ mod test {
         #[test]
         fn none_after_read_all() {
             let mut b = new(16);
-            let mut m = mock_serial::new_mock(vec![b"abc\r\n"]);
+            let mut m = MockReadWrite::new(vec![b"abc\r\n"]);
             b.fill_buf(&mut m).unwrap();
 
             assert_eq!(b"abc\r\n", b.read_to_lf().unwrap());
@@ -255,7 +255,7 @@ mod test {
         #[test]
         fn rest_all() {
             let mut b = new(16);
-            let mut m = mock_serial::new_mock(vec![b"abc\r\n"]);
+            let mut m = MockReadWrite::new(vec![b"abc\r\n"]);
             b.fill_buf(&mut m).unwrap();
 
             assert_eq!(b"abc\r\n", b.get_remain().unwrap());
@@ -265,7 +265,7 @@ mod test {
         #[test]
         fn rest_all_after_read_to_lf() {
             let mut b = new(16);
-            let mut m = mock_serial::new_mock(vec![b"abc\r\ndef"]);
+            let mut m = MockReadWrite::new(vec![b"abc\r\ndef"]);
             b.fill_buf(&mut m).unwrap();
 
             assert_eq!(b"abc\r\n", b.read_to_lf().unwrap());
@@ -278,7 +278,7 @@ mod test {
         #[test]
         fn none_after_read_to_lf_all() {
             let mut b = new(16);
-            let mut m = mock_serial::new_mock(vec![b"abc\r\ndef\r\n"]);
+            let mut m = MockReadWrite::new(vec![b"abc\r\ndef\r\n"]);
             b.fill_buf(&mut m).unwrap();
 
             assert_eq!(b"abc\r\n", b.read_to_lf().unwrap());

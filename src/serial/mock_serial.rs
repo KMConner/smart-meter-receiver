@@ -12,11 +12,13 @@ pub struct MockReadWrite<'a> {
 }
 
 #[cfg(test)]
-pub fn new_mock<'a>(data: Vec<&'a [u8]>) -> MockReadWrite<'a> {
-    MockReadWrite {
-        read_buf: data,
-        write_buf: Vec::new(),
-        pointer: 0,
+impl<'a> MockReadWrite<'a> {
+    pub fn new(data: Vec<&'a [u8]>) -> MockReadWrite<'a> {
+        MockReadWrite {
+            read_buf: data,
+            write_buf: Vec::new(),
+            pointer: 0,
+        }
     }
 }
 
@@ -70,7 +72,7 @@ mod test {
         use super::*;
         #[test]
         fn read_empty() {
-            let mut mock = new_mock(Vec::new());
+            let mut mock = MockReadWrite::new(Vec::new());
             let mut buf = vec![0u8; 128];
             assert_eq!(0, mock.read(&mut buf).unwrap());
             assert_eq!([0; 128].to_vec(), buf.to_vec());
@@ -78,7 +80,7 @@ mod test {
 
         #[test]
         fn read_once() {
-            let mut mock = new_mock(vec![b"abc", b"123"]);
+            let mut mock = MockReadWrite::new(vec![b"abc", b"123"]);
             let mut buf = vec![0u8; 4];
             assert_eq!(3, mock.read(&mut buf).unwrap());
             assert_eq!(b"abc\0".to_vec(), buf.to_vec());
@@ -86,7 +88,7 @@ mod test {
 
         #[test]
         fn read_all() {
-            let mut mock = new_mock(vec![b"abc", b"123"]);
+            let mut mock = MockReadWrite::new(vec![b"abc", b"123"]);
             let mut buf = vec![0u8; 4];
             let n = mock.read(&mut buf).unwrap();
             assert_eq!(3, n);
@@ -105,27 +107,27 @@ mod test {
         use super::*;
         #[test]
         fn begin_empty() {
-            let mock = new_mock(Vec::new());
+            let mock = MockReadWrite::new(Vec::new());
             assert_eq!(0, mock.write_buf.len());
         }
 
         #[test]
         fn write_nothing() {
-            let mut mock = new_mock(Vec::new());
+            let mut mock = MockReadWrite::new(Vec::new());
             assert_eq!(0, mock.write(b"").unwrap());
             assert_eq!(b"".to_vec(), mock.write_buf);
         }
 
         #[test]
         fn write_once() {
-            let mut mock = new_mock(Vec::new());
+            let mut mock = MockReadWrite::new(Vec::new());
             assert_eq!(3, mock.write(b"abc").unwrap());
             assert_eq!(b"abc".to_vec(), mock.write_buf);
         }
 
         #[test]
         fn write_multiple() {
-            let mut mock = new_mock(Vec::new());
+            let mut mock = MockReadWrite::new(Vec::new());
 
             assert_eq!(3, mock.write(b"abc").unwrap());
             assert_eq!(3, mock.write(b"123").unwrap());
@@ -139,7 +141,7 @@ mod test {
         use super::*;
         #[test]
         fn always_ok() {
-            let mut mock = new_mock(Vec::new());
+            let mut mock = MockReadWrite::new(Vec::new());
             assert_eq!(true, mock.flush().is_ok())
         }
     }
