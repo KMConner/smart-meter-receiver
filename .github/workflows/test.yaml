@@ -8,5 +8,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libudev-dev
+        env:
+          - DEBIAN_FRONTEND=noninteractive
       - name: Run tests
         run: cargo test --verbose
