@@ -1,5 +1,5 @@
 use crate::serial::Error as SerialError;
-use thiserror::Errpr as ThisError;
+use thiserror::Error as ThisError;
 
 #[derive(ThisError, Debug)]
 pub enum Error {
