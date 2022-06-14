@@ -2,10 +2,13 @@
 use mockall::mock;
 
 #[cfg(test)]
-mock! {
-    pub Connection{}
+use crate::serial::Connection;
 
-    impl crate::serial::Connection for Connection {
+#[cfg(test)]
+mock! {
+    pub Serial{}
+
+    impl Connection for Serial {
         fn write_line(&mut self, line: &str) -> crate::serial::errors::Result<()>;
         fn read_line(&mut self) -> crate::serial::errors::Result<String>;
     }
