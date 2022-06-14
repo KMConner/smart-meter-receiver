@@ -1,11 +1,12 @@
 use crate::serial::Connection;
+use crate::wisun_module::errors::Result;
 
-pub struct WiSunCLient {
-    serial_connection: Connection,
+pub struct WiSunCLient<T: Connection> {
+    serial_connection: T,
 }
 
-impl WiSunCLient {
-    fn new(serial_connection: Connection) -> Self {
+impl<T: Connection> WiSunCLient<T> {
+    fn new(serial_connection: T) -> Self {
         WiSunCLient {
             serial_connection: serial_connection,
         }
