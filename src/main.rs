@@ -1,4 +1,5 @@
 mod serial;
+mod wisun_module;
 use serial::Connection;
 
 fn main() {
