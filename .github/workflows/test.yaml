@@ -17,8 +17,8 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       - name: Install Dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libudev-dev
+          sudo apt-fast update
+          sudo apt-fast install -y libudev-dev
         env:
           DEBIAN_FRONTEND: noninteractive
       - name: Run tests
