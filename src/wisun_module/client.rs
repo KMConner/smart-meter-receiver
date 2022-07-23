@@ -2,15 +2,17 @@ use crate::serial::{Connection, Error as SerialError};
 use crate::wisun_module::errors::{Error, Result};
 use std::io::{Error as IoError, ErrorKind as IoErrorKind};
 
-pub struct WiSunCLient<T: Connection> {
+pub struct WiSunClient<T: Connection> {
     serial_connection: T,
 }
 
-impl<T: Connection> WiSunCLient<T> {
-    fn new(serial_connection: T) -> Self {
-        WiSunCLient {
+impl<T: Connection> WiSunClient<T> {
+    pub fn new(serial_connection: T) -> Result<Self> {
+        let mut client = WiSunClient {
             serial_connection: serial_connection,
-        }
+        };
+        client.ensure_echoback_off()?;
+        Ok(client)
     }
 
     fn wait_ok(&mut self) -> Result<()> {
@@ -45,16 +47,16 @@ impl<T: Connection> WiSunCLient<T> {
 
 #[cfg(test)]
 mod test {
-    use super::WiSunCLient;
+    use super::WiSunClient;
     use crate::wisun_module::mock::MockSerial;
 
-    fn new_client<F>(mut prepare_mock: F) -> WiSunCLient<MockSerial>
+    fn new_client<F>(mut prepare_mock: F) -> WiSunClient<MockSerial>
     where
         F: FnMut(&mut MockSerial),
     {
         let mut mock = MockSerial::new();
         prepare_mock(&mut mock);
-        WiSunCLient {
+        WiSunClient {
             serial_connection: mock,
         }
     }
