@@ -38,7 +38,8 @@ impl<T: Connection> WiSunCLient<T> {
     }
 
     fn ensure_echoback_off(&mut self) -> Result<()> {
-        todo!();
+        self.serial_connection.write_line("SKSREG SFE 0")?;
+        self.wait_ok()
     }
 }
 
@@ -125,6 +126,29 @@ mod test {
                     .returning(|| Ok(String::from("FAIL ER04")));
             });
             assert_eq!(cli.wait_ok().is_err(), true);
+        }
+    }
+
+    mod ensure_echoback_off_test {
+        use super::*;
+        use mockall::{predicate, Sequence};
+
+        #[test]
+        fn ok() {
+            let mut seq = Sequence::new();
+
+            let mut cli = new_client(|mock| -> () {
+                mock.expect_write_line()
+                    .with(predicate::eq("SKSREG SFE 0"))
+                    .times(1)
+                    .in_sequence(&mut seq)
+                    .returning(|_| Ok(()));
+                mock.expect_read_line()
+                    .times(1)
+                    .in_sequence(&mut seq)
+                    .returning(|| Ok(String::from("OK")));
+            });
+            cli.ensure_echoback_off().unwrap();
         }
     }
 }
