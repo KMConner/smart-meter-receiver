@@ -20,6 +20,9 @@ impl<T: Connection> WiSunCLient<T> {
                     if line == "OK" {
                         return Ok(());
                     }
+                    if line.starts_with("FAIL") {
+                        return Err(Error::CommandError(line));
+                    }
                 }
                 Err(SerialError::IoError(ioe)) => {
                     if ioe.kind() == IoErrorKind::TimedOut {
@@ -106,6 +109,22 @@ mod test {
                     .returning(|| Ok(String::from("OK")));
             });
             cli.wait_ok().unwrap();
+        }
+
+        #[test]
+        fn error_when_fail() {
+            let mut seq = Sequence::new();
+            let mut cli = new_client(|mock| -> () {
+                mock.expect_read_line()
+                    .times(1)
+                    .in_sequence(&mut seq)
+                    .returning(|| Ok(String::from("SKVER")));
+                mock.expect_read_line()
+                    .times(1)
+                    .in_sequence(&mut seq)
+                    .returning(|| Ok(String::from("FAIL ER04")));
+            });
+            assert_eq!(cli.wait_ok().is_err(), true);
         }
     }
 }
