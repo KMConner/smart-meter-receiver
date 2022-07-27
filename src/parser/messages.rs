@@ -1,8 +1,8 @@
-use std::net::Ipv6Addr;
+use crate::parser::event::WiSunEvent;
 
 #[derive(Debug, PartialEq)]
-pub enum ParseResult {
-    Ok(SerialMessage),
+pub enum ParseResult<T> {
+    Ok(T),
     Err(String),
     Empty,
     More,
@@ -16,34 +16,7 @@ pub enum SerialMessage {
     Unknown(String),
 }
 
-#[derive(Debug, PartialEq)]
-pub enum WiSunEvent {
-    RxUdp(UdpPacket),
-    Event(EventBody),
-}
+#[cfg(test)]
+mod test{
 
-#[derive(Debug, PartialEq)]
-pub struct UdpPacket {
-    pub sender: Ipv6Addr,
-    pub dest: Ipv6Addr,
-    pub source_port: u16,
-    pub dest_port: u16,
-    // TODO: add mac address field
-    pub data: Vec<u8>,
-}
-
-#[repr(u8)]
-#[derive(Debug, PartialEq)]
-pub enum EventKind {
-    FinishedUdpSend = 0x21,
-    FinishedActiveScan = 0x22,
-    ErrorOnPanaConnection = 0x24,
-    EstablishedPanaConnection = 0x25,
-}
-
-#[derive(Debug, PartialEq)]
-pub struct EventBody {
-    pub kind: EventKind,
-    pub sender: Ipv6Addr,
-    // TODO: Add param if necessary
 }
