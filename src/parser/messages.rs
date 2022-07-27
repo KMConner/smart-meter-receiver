@@ -1,14 +1,15 @@
 use std::net::Ipv6Addr;
 
 #[derive(Debug, PartialEq)]
-enum ParseResult {
+pub enum ParseResult {
     Ok(SerialMessage),
     Err(String),
+    Empty,
     More,
 }
 
 #[derive(Debug, PartialEq)]
-enum SerialMessage {
+pub enum SerialMessage {
     Ok,
     Fail(String),
     Event(WiSunEvent),
@@ -16,7 +17,7 @@ enum SerialMessage {
 }
 
 #[derive(Debug, PartialEq)]
-enum WiSunEvent {
+pub enum WiSunEvent {
     RxUdp(UdpPacket),
     Event(EventBody),
 }
