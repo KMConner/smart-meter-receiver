@@ -1,4 +1,5 @@
 mod serial;
+mod parser;
 use serial::Connection;
 
 fn main() {
