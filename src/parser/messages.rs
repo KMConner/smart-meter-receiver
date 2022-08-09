@@ -13,11 +13,11 @@ pub enum SerialMessage {
     Ok,
     Fail(String),
     Event(WiSunEvent),
-    Unknown(String),
+    // Unknown(String),
 }
 
 impl SerialMessage {
-    fn parse(data: &str) -> ParseResult<Self> {
+    pub(in crate::parser) fn parse(data: &str) -> ParseResult<Self> {
         if data == "OK" {
             return ParseResult::Ok(SerialMessage::Ok);
         }

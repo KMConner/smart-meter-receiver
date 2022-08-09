@@ -39,9 +39,9 @@ pub struct EventBody {
 
 #[derive(Debug, PartialEq)]
 pub struct PanDescBody {
-    channel: u8,
-    pan_id: u16,
-    addr: [u8; 8],
+    pub channel: u8,
+    pub pan_id: u16,
+    pub addr: [u8; 8],
 }
 
 impl WiSunEvent {
