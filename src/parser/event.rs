@@ -95,7 +95,7 @@ impl WiSunEvent {
 
     fn parse_pan_desc(data: &str) -> ParseResult<Self> {
         let lines: Vec<&str> = data.split('\n').collect();
-        if lines.len() != 7 {
+        if lines.len() <= 1 {
             return ParseResult::More;
         }
 
@@ -106,6 +106,10 @@ impl WiSunEvent {
                 return ParseResult::Err(format!("Malformed line in EPANDESC: {}", l));
             }
             pan_data.insert(kv[0], kv[1]);
+        }
+
+        if pan_data.len() < 6 {
+            return ParseResult::More;
         }
 
         let pan_data = pan_data;
@@ -281,5 +285,23 @@ mod test {
                        pan_id: 0x3077,
                        addr: [0x12, 0x34, 0x56, 0x78, 0x90, 0xAB, 0xCD, 0xEF],
                    })));
+    }
+
+    #[test]
+    fn parse_pan_desc_err() {
+        let result = WiSunEvent::parse("EPANDESC\nOK");
+        match result {
+            ParseResult::Err(_) => {}
+            _ => panic!("Expected Err, got: {:?}", result)
+        };
+    }
+
+    #[test]
+    fn parse_pan_desc_err_2() {
+        let result = WiSunEvent::parse("EPANDESC\n  Channel:2F\nOK");
+        match result {
+            ParseResult::Err(_) => {}
+            _ => panic!("Expected Err, got: {:?}", result)
+        };
     }
 }
