@@ -37,6 +37,7 @@ impl SerialMessage {
 
 #[cfg(test)]
 mod test {
+    use std::mem::discriminant;
     use super::*;
 
     #[test]
@@ -61,9 +62,7 @@ mod test {
 
     #[test]
     fn parse_event_err() {
-        match SerialMessage::parse("EUNKNOWN") {
-            ParseResult::Err(_) => {}
-            _ => assert_eq!(1, 0),
-        };
+        assert_eq!(discriminant(&SerialMessage::parse("EUNKNOWN")),
+                   discriminant(&ParseResult::Err(String::default())));
     }
 }

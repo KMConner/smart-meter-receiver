@@ -37,6 +37,7 @@ impl WiSunModuleParser {
 
 #[cfg(test)]
 mod test {
+    use std::mem::discriminant;
     use crate::parser::event::{EventBody, EventKind, PanDescBody, WiSunEvent};
     use super::*;
 
@@ -106,9 +107,7 @@ mod test {
     fn add_line_err() {
         let mut parser = WiSunModuleParser::new();
         assert_eq!(parser.add_line("EPANDESC"), ParseResult::More);
-        match parser.add_line("OK") {
-            ParseResult::Err(_) => {}
-            _ => panic!("Err expected"),
-        };
+        assert_eq!(discriminant(&parser.add_line("OK")),
+                   discriminant(&ParseResult::Err(String::default())));
     }
 }

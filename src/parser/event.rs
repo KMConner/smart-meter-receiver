@@ -173,6 +173,7 @@ impl WiSunEvent {
 
 #[cfg(test)]
 mod test {
+    use std::mem::discriminant;
     use crate::parser::messages::ParseResult;
     use super::*;
 
@@ -289,19 +290,12 @@ mod test {
 
     #[test]
     fn parse_pan_desc_err() {
-        let result = WiSunEvent::parse("EPANDESC\nOK");
-        match result {
-            ParseResult::Err(_) => {}
-            _ => panic!("Expected Err, got: {:?}", result)
-        };
+        assert_eq!(discriminant(&WiSunEvent::parse("EPANDESC\nOK")), discriminant(&ParseResult::Err(String::new())));
     }
 
     #[test]
     fn parse_pan_desc_err_2() {
-        let result = WiSunEvent::parse("EPANDESC\n  Channel:2F\nOK");
-        match result {
-            ParseResult::Err(_) => {}
-            _ => panic!("Expected Err, got: {:?}", result)
-        };
+        assert_eq!(discriminant(&WiSunEvent::parse("EPANDESC\n  Channel:2F\nOK")),
+                   discriminant(&ParseResult::Err(String::new())));
     }
 }
