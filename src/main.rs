@@ -2,7 +2,6 @@ mod serial;
 mod parser;
 mod wisun_module;
 
-use serial::Connection;
 use crate::wisun_module::WiSunClient;
 
 fn main() {
