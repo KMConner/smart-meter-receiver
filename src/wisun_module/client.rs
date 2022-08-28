@@ -37,7 +37,7 @@ impl<T: Connection, S: Parser> WiSunClient<T, S> {
                         ParseResult::More => {
                             continue;
                         }
-                        ParseResult::Err(s) => {
+                        ParseResult::Err(_) => {
                             // TODO: logging
                             continue;
                         }
@@ -94,7 +94,7 @@ impl<T: Connection, S: Parser> WiSunClient<T, S> {
     }
 
     fn wait_ok(&mut self) -> Result<()> {
-        let result = self.wait_fn(|m| *m == SerialMessage::Ok, err_when_fail)?;
+        self.wait_fn(|m| *m == SerialMessage::Ok, err_when_fail)?;
         Ok(())
     }
 

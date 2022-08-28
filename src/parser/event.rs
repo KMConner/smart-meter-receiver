@@ -3,7 +3,6 @@ use std::net::Ipv6Addr;
 use crate::parser::messages::ParseResult;
 use num_enum::TryFromPrimitive;
 use std::convert::TryFrom;
-use crate::parser::SerialMessage;
 
 #[derive(Debug, PartialEq)]
 pub enum WiSunEvent {
