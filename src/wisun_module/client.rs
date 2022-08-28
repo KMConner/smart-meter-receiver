@@ -37,7 +37,7 @@ impl<T: Connection, S: Parser> WiSunClient<T, S> {
                         ParseResult::More => {
                             continue;
                         }
-                        ParseResult::Err(s) => {
+                        ParseResult::Err(_) => {
                             // TODO: logging
                             continue;
                         }
@@ -57,6 +57,7 @@ impl<T: Connection, S: Parser> WiSunClient<T, S> {
     }
 
     pub fn flush_messages(&mut self) {
+        log::debug!("flushing messages");
         self.message_buffer.clear();
     }
 
@@ -93,16 +94,18 @@ impl<T: Connection, S: Parser> WiSunClient<T, S> {
     }
 
     fn wait_ok(&mut self) -> Result<()> {
-        let result = self.wait_fn(|m| *m == SerialMessage::Ok, err_when_fail)?;
+        self.wait_fn(|m| *m == SerialMessage::Ok, err_when_fail)?;
         Ok(())
     }
 
     fn ensure_echoback_off(&mut self) -> Result<()> {
+        self.flush_messages();
         self.serial_connection.write_line("SKSREG SFE 0")?;
         self.wait_ok()
     }
 
     pub fn get_version(&mut self) -> Result<String> {
+        self.flush_messages();
         self.serial_connection.write_line("SKVER")?;
         self.wait_ok()?;
         let msg = self.wait_fn(|m| -> bool{
