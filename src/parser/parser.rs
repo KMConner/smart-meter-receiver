@@ -1,6 +1,7 @@
 use crate::parser::messages::{ParseResult, SerialMessage};
+use crate::parser::traits::Parser;
 
-struct WiSunModuleParser {
+pub struct WiSunModuleParser {
     pending_message: Option<String>,
 }
 
@@ -10,8 +11,10 @@ impl WiSunModuleParser {
             pending_message: None
         }
     }
+}
 
-    pub fn add_line(&mut self, line: &str) -> ParseResult<SerialMessage> {
+impl Parser for WiSunModuleParser {
+    fn add_line(&mut self, line: &str) -> ParseResult<SerialMessage> {
         if self.pending_message.is_none() && line.len() == 0 {
             return ParseResult::Empty;
         }
