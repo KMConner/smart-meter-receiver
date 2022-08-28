@@ -102,7 +102,7 @@ impl<T: Connection, S: Parser> WiSunClient<T, S> {
         self.wait_ok()
     }
 
-    fn get_version(&mut self) -> Result<String> {
+    pub fn get_version(&mut self) -> Result<String> {
         self.serial_connection.write_line("SKVER")?;
         self.wait_ok()?;
         let msg = self.wait_fn(|m| -> bool{
