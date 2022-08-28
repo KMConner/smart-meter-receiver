@@ -1,10 +1,18 @@
-mod serial;
 mod parser;
+mod serial;
 mod wisun_module;
 
 use crate::wisun_module::WiSunClient;
+use simplelog::{ColorChoice, CombinedLogger, Config, LevelFilter, TermLogger, TerminalMode};
 
 fn main() {
+    CombinedLogger::init(vec![TermLogger::new(
+        LevelFilter::Trace,
+        Config::default(),
+        TerminalMode::Mixed,
+        ColorChoice::Auto,
+    )])
+    .unwrap();
     let conn = serial::new("/dev/ttyS0", 115200).unwrap();
     let mut cli = WiSunClient::new(conn).unwrap();
     let version = cli.get_version().unwrap();

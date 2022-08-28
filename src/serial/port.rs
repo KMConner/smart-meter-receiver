@@ -27,6 +27,7 @@ impl<T: ReadWrite> Connection for ConnectionImpl<T> {
         self.connection.write(binary)?;
         self.connection.write(b"\r\n")?;
         self.connection.flush()?;
+        log::trace!("Serial Input: {}", line);
         Ok(())
     }
 
@@ -43,6 +44,7 @@ impl<T: ReadWrite> Connection for ConnectionImpl<T> {
                 Some(bin) => {
                     txt.append(&mut bin.to_vec());
                     let text = String::from_utf8(trim_line_end(&txt).to_vec())?;
+                    log::trace!("Serial Output: {}", text);
                     return Ok(text);
                 }
                 None => match self.read_buffer.get_remain() {
