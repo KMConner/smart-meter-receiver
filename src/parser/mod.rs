@@ -5,3 +5,4 @@ mod traits;
 
 pub use traits::Parser;
 pub use parser::WiSunModuleParser;
+pub use messages::{ParseResult, SerialMessage};
