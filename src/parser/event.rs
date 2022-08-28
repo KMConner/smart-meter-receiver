@@ -3,11 +3,13 @@ use std::net::Ipv6Addr;
 use crate::parser::messages::ParseResult;
 use num_enum::TryFromPrimitive;
 use std::convert::TryFrom;
+use crate::parser::SerialMessage;
 
 #[derive(Debug, PartialEq)]
 pub enum WiSunEvent {
     PanDesc(PanDescBody),
     RxUdp(UdpPacket),
+    Version(String),
     Event(EventBody),
 }
 
@@ -151,6 +153,13 @@ impl WiSunEvent {
         }))
     }
 
+    fn parse_version(data: &str, parts: Vec<&str>) -> ParseResult<Self> {
+        if parts.len() != 2 {
+            return ParseResult::Err(String::from(data));
+        }
+
+        ParseResult::Ok(WiSunEvent::Version(parts[1].to_string()))
+    }
 
     pub fn parse(data: &str) -> ParseResult<Self> {
         if data.len() == 0 {
@@ -166,6 +175,7 @@ impl WiSunEvent {
             "EVENT" => WiSunEvent::parse_event(data, parts),
             "ERXUDP" => WiSunEvent::parse_rx_udp(data, parts),
             "EPANDESC" => WiSunEvent::parse_pan_desc(data),
+            "EVER" => WiSunEvent::parse_version(data, parts),
             _ => ParseResult::Err(format!("Unknown event name. line: {}", data))
         }
     }
@@ -222,6 +232,11 @@ mod test {
             WiSunEvent::parse("EVENT 22 FE80:0000:0000:0000:1234:5678:90AB:CDEF 02"),
             ParseResult::Ok(WiSunEvent::Event(even_body))
         );
+    }
+
+    #[test]
+    fn parse_ever() {
+        assert_eq!(WiSunEvent::parse("EVER 1.2.3"), ParseResult::Ok(WiSunEvent::Version("1.2.3".to_string())))
     }
 
     #[test]
