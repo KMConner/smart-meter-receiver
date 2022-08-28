@@ -1,7 +1,7 @@
 use crate::serial::{Connection, Error as SerialError};
 use crate::wisun_module::errors::{Error, Result};
 use std::io::{ErrorKind as IoErrorKind};
-use crate::parser::{Parser, ParseResult, SerialMessage, WiSunEvent};
+use crate::parser::{Parser, ParseResult, SerialMessage, WiSunEvent, WiSunModuleParser};
 
 pub struct WiSunClient<T: Connection, S: Parser> {
     serial_connection: T,
@@ -9,17 +9,19 @@ pub struct WiSunClient<T: Connection, S: Parser> {
     message_buffer: Vec<SerialMessage>,
 }
 
-impl<T: Connection, S: Parser> WiSunClient<T, S> {
-    pub fn new(serial_connection: T, serial_parser: S) -> Result<Self> {
+impl<T: Connection> WiSunClient<T, WiSunModuleParser> {
+    pub fn new(serial_connection: T) -> Result<Self> {
         let mut client = WiSunClient {
             serial_connection,
-            serial_parser,
+            serial_parser: WiSunModuleParser::new(),
             message_buffer: Vec::new(),
         };
         client.ensure_echoback_off()?;
         Ok(client)
     }
+}
 
+impl<T: Connection, S: Parser> WiSunClient<T, S> {
     fn get_message(&mut self) -> Result<bool> {
         loop {
             match self.serial_connection.read_line() {
