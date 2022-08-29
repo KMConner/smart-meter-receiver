@@ -61,9 +61,8 @@ impl<T: Connection, S: Parser> WiSunClient<T, S> {
         self.message_buffer.clear();
     }
 
-    fn wait_fn<F, H>(&mut self, pred: F, err_if: H) -> Result<SerialMessage>
-        where F: Fn(&SerialMessage) -> bool, H: Fn(&SerialMessage) -> Option<String> {
-
+    fn search_on_buffer<F>(&mut self, pred: &F) -> Option<SerialMessage>
+        where F: Fn(&SerialMessage) -> bool {
         // Search on message_buffer
         let mut delete_idx = usize::MAX;
         for i in 0..self.message_buffer.len() {
@@ -75,7 +74,17 @@ impl<T: Connection, S: Parser> WiSunClient<T, S> {
             }
         }
         if delete_idx < usize::MAX {
-            return Ok(self.message_buffer.remove(delete_idx));
+            return Some(self.message_buffer.remove(delete_idx));
+        }
+        None
+    }
+
+    fn wait_fn<F, H>(&mut self, pred: F, err_if: H) -> Result<SerialMessage>
+        where F: Fn(&SerialMessage) -> bool, H: Fn(&SerialMessage) -> Option<String> {
+
+        // Search on message_buffer
+        if let Some(m) = self.search_on_buffer(&pred) {
+            return Ok(m);
         }
 
         // get new message from console
