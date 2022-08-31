@@ -177,7 +177,7 @@ impl<T: Connection, S: Parser> WiSunClient<T, S> {
             let line = format!("SKSCAN 2 FFFFFFFF {}", i);
             self.serial_connection.write_line(line.as_str())?;
             self.wait_ok()?;
-        log::debug!("wait OK OK ");
+            log::debug!("wait OK OK ");
             self.wait_fn(|m| -> bool{
                 match m {
                     SerialMessage::Event(WiSunEvent::Event(e)) => {
@@ -200,7 +200,7 @@ impl<T: Connection, S: Parser> WiSunClient<T, S> {
     }
 
     fn join(&mut self, addr: &Ipv6Addr) -> Result<()> {
-        let line = format!("SKJOIN {}", addr);
+        let line = format!("SKJOIN {}", ipv6_addr_full_string(addr));
         self.serial_connection.write_line(line.as_str())?;
         self.wait_ok()?;
         self.wait_fn(|m| -> bool{
@@ -250,8 +250,17 @@ fn err_when_fail(m: &SerialMessage) -> Option<String> {
     }
 }
 
+fn ipv6_addr_full_string(ip: &Ipv6Addr) -> String {
+    let seg = &ip.segments();
+    format!("{:04X}:{:04X}:{:04X}:{:04X}:{:04X}:{:04X}:{:04X}:{:04X}",
+            seg[0], seg[1], seg[2], seg[3], seg[4], seg[5], seg[6], seg[7])
+}
+
 #[cfg(test)]
 mod test {
+    use std::net::Ipv6Addr;
+    use std::str::FromStr;
+    use crate::wisun_module::client::ipv6_addr_full_string;
     use crate::wisun_module::mock::{MockSerial, MockSerialParser};
 
     use super::WiSunClient;
@@ -570,13 +579,11 @@ mod test {
                 addr: [0x12, 0x34, 0x56, 0x78, 0x90, 0xAB, 0xCD, 0xEF],
             }, cli.scan().unwrap());
         }
-        //
-        // #[test]
-        // fn connect_ok(){
-        //     let mut cli = new_client(|s, p| {
-        //
-        //     });
-        //
-        // }
+    }
+
+    #[test]
+    fn ipv6_addr_full_string_test() {
+        let ip = Ipv6Addr::from_str("FE80:0000:0000:0000:1234:5678:90AB:CDEF").unwrap();
+        assert_eq!(ipv6_addr_full_string(&ip), "FE80:0000:0000:0000:1234:5678:90AB:CDEF".to_string());
     }
 }
