@@ -1,5 +1,4 @@
 use std::io;
-use std::io::ErrorKind as IoErrorKind;
 use std::net::Ipv6Addr;
 
 use crate::parser::{Parser, ParseResult, SerialMessage, WiSunEvent, WiSunModuleParser};
@@ -56,7 +55,15 @@ impl<T: Connection, S: Parser> WiSunClient<T, S> {
                     }
                     return Err(Error::SerialError(SerialError::SerialError(ioe)));
                 }
+                Err(SerialError::IoError(ioe)) => {
+                    if ioe.kind() == io::ErrorKind::TimedOut {
+                        continue;
+                    }
+                    return Err(Error::SerialError(SerialError::IoError(ioe)));
+                }
                 Err(e) => {
+                    log::debug!("{:?}", e);
+
                     return Err(Error::SerialError(e));
                 }
             }
@@ -139,7 +146,7 @@ impl<T: Connection, S: Parser> WiSunClient<T, S> {
 
     pub fn connect(&mut self, bid: &str, password: &str) -> Result<()> {
         self.set_password(password)?;
-        self.set_bid(bid);
+        self.set_bid(bid)?;
         let pan = self.scan()?;
         let channel = format!("{:X}", pan.channel);
         let pan_id = format!("{:X}", pan.pan_id);
@@ -170,6 +177,7 @@ impl<T: Connection, S: Parser> WiSunClient<T, S> {
             let line = format!("SKSCAN 2 FFFFFFFF {}", i);
             self.serial_connection.write_line(line.as_str())?;
             self.wait_ok()?;
+        log::debug!("wait OK OK ");
             self.wait_fn(|m| -> bool{
                 match m {
                     SerialMessage::Event(WiSunEvent::Event(e)) => {
@@ -428,16 +436,13 @@ mod test {
     }
 
     mod connect_test {
-        use std::io;
         use std::net::Ipv6Addr;
 
         use mockall::{predicate, Sequence};
 
         use crate::parser::{ParseResult, SerialMessage, WiSunEvent};
         use crate::parser::event::{EventBody, EventKind, PanDescBody};
-        use crate::serial::Error::SerialError;
         use crate::wisun_module::client::test::new_client;
-        use crate::wisun_module::errors::Error;
 
         #[test]
         fn get_ip() {
