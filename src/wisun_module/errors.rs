@@ -7,6 +7,8 @@ pub enum Error {
     SerialError(#[from] SerialError),
     #[error("module returned error {0}")]
     CommandError(String),
+    #[error("failed to scan pan: {0}")]
+    ScanError(String),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

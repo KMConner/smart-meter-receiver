@@ -1,7 +1,11 @@
+use std::io;
+use std::io::ErrorKind as IoErrorKind;
+use std::net::Ipv6Addr;
+
+use crate::parser::{Parser, ParseResult, SerialMessage, WiSunEvent, WiSunModuleParser};
+use crate::parser::event::{EventKind, PanDescBody};
 use crate::serial::{Connection, Error as SerialError};
 use crate::wisun_module::errors::{Error, Result};
-use std::io::{ErrorKind as IoErrorKind};
-use crate::parser::{Parser, ParseResult, SerialMessage, WiSunEvent, WiSunModuleParser};
 
 pub struct WiSunClient<T: Connection, S: Parser> {
     serial_connection: T,
@@ -43,11 +47,14 @@ impl<T: Connection, S: Parser> WiSunClient<T, S> {
                         }
                     }
                 }
-                Err(SerialError::IoError(ioe)) => {
-                    if ioe.kind() == IoErrorKind::TimedOut {
-                        continue;
+                Err(SerialError::SerialError(ioe)) => {
+                    if let serialport::ErrorKind::Io(e) = ioe.kind {
+                        if e == io::ErrorKind::TimedOut {
+                            continue;
+                        }
+                        return Err(Error::SerialError(SerialError::SerialError(ioe)));
                     }
-                    return Err(Error::SerialError(SerialError::IoError(ioe)));
+                    return Err(Error::SerialError(SerialError::SerialError(ioe)));
                 }
                 Err(e) => {
                     return Err(Error::SerialError(e));
@@ -57,6 +64,7 @@ impl<T: Connection, S: Parser> WiSunClient<T, S> {
     }
 
     pub fn flush_messages(&mut self) {
+        // TODO: read line
         log::debug!("flushing messages");
         self.message_buffer.clear();
     }
@@ -128,6 +136,103 @@ impl<T: Connection, S: Parser> WiSunClient<T, S> {
         }
         Err(Error::CommandError("Unexpected msg".to_string()))
     }
+
+    pub fn connect(&mut self, bid: &str, password: &str) -> Result<()> {
+        self.set_password(password)?;
+        self.set_bid(bid);
+        let pan = self.scan()?;
+        let channel = format!("{:X}", pan.channel);
+        let pan_id = format!("{:X}", pan.pan_id);
+        self.set_register("S2", channel.as_str())?;
+        self.set_register("S3", pan_id.as_str())?;
+        let ip = self.get_ip(&pan.addr);
+        self.join(&ip)
+    }
+
+    fn set_password(&mut self, password: &str) -> Result<()> {
+        self.flush_messages();
+        let line = format!("SKSETPWD {:X} {}", password.len(), password);
+        self.serial_connection.write_line(line.as_str())?;
+        self.wait_ok()
+    }
+
+    fn set_bid(&mut self, bid: &str) -> Result<()> {
+        self.flush_messages();
+        let line = format!("SKSETRBID {}", bid);
+        self.serial_connection.write_line(line.as_str())?;
+        self.wait_ok()
+    }
+
+    fn scan(&mut self) -> Result<PanDescBody> {
+        for i in 4..10 {
+            // Start scanning -> Wait for scan finish -> Look for EPANDESC
+            self.flush_messages();
+            let line = format!("SKSCAN 2 FFFFFFFF {}", i);
+            self.serial_connection.write_line(line.as_str())?;
+            self.wait_ok()?;
+            self.wait_fn(|m| -> bool{
+                match m {
+                    SerialMessage::Event(WiSunEvent::Event(e)) => {
+                        e.kind == EventKind::FinishedActiveScan
+                    }
+                    _ => false,
+                }
+            }, err_when_fail)?;
+            let desc = self.search_on_buffer(&|m| -> bool{
+                match m {
+                    SerialMessage::Event(WiSunEvent::PanDesc(_)) => true,
+                    _ => false,
+                }
+            });
+            if let Some(SerialMessage::Event(WiSunEvent::PanDesc(body))) = desc {
+                return Ok(body);
+            }
+        }
+        Err(Error::ScanError("pan not found".to_string()))
+    }
+
+    fn join(&mut self, addr: &Ipv6Addr) -> Result<()> {
+        let line = format!("SKJOIN {}", addr);
+        self.serial_connection.write_line(line.as_str())?;
+        self.wait_ok()?;
+        self.wait_fn(|m| -> bool{
+            match m {
+                SerialMessage::Event(WiSunEvent::Event(e)) => {
+                    e.kind == EventKind::EstablishedPanaConnection
+                }
+                _ => false,
+            }
+        },
+                     |m| -> Option<String>{
+                         match m {
+                             SerialMessage::Fail(s) => Some(s.clone()),
+                             SerialMessage::Event(WiSunEvent::Event(e)) => {
+                                 if e.kind == EventKind::ErrorOnPanaConnection {
+                                     return Some("failed to connect to pana".to_string());
+                                 }
+                                 None
+                             }
+                             _ => None
+                         }
+                     })?;
+        Ok(())
+    }
+
+    fn set_register(&mut self, reg: &str, value: &str) -> Result<()> {
+        self.flush_messages();
+        let line = format!("SKSREG {} {}", reg, value);
+        self.serial_connection.write_line(line.as_str())?;
+        self.wait_ok()
+    }
+
+    fn get_ip(&self, addr: &[u8; 8]) -> Ipv6Addr {
+        let mut ip: [u8; 16] = [0xFE, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        for i in 0..8 {
+            ip[8 + i] = addr[i];
+        }
+        ip[8] ^= 0b00000010;
+        ip.into()
+    }
 }
 
 fn err_when_fail(m: &SerialMessage) -> Option<String> {
@@ -139,8 +244,9 @@ fn err_when_fail(m: &SerialMessage) -> Option<String> {
 
 #[cfg(test)]
 mod test {
+    use crate::wisun_module::mock::{MockSerial, MockSerialParser};
+
     use super::WiSunClient;
-    use crate::wisun_module::mock::{MockSerialParser, MockSerial};
 
     fn new_client<F>(mut prepare_mock: F) -> WiSunClient<MockSerial, MockSerialParser>
         where
@@ -157,11 +263,14 @@ mod test {
     }
 
     mod wait_ok_test {
-        use super::*;
-        use crate::serial::Error as SerialError;
-        use mockall::Sequence;
         use std::io::{Error as IoError, ErrorKind as IoErrorKind};
+
+        use mockall::Sequence;
+
         use crate::parser::{ParseResult, SerialMessage};
+        use crate::serial::Error as SerialError;
+
+        use super::*;
 
         #[test]
         fn ok_when_read_ok() {
@@ -255,9 +364,11 @@ mod test {
     }
 
     mod get_version_test {
-        use super::*;
         use mockall::{predicate, Sequence};
+
         use crate::parser::{ParseResult, SerialMessage, WiSunEvent};
+
+        use super::*;
 
         #[test]
         fn ok_before_ever() {
@@ -314,5 +425,153 @@ mod test {
             let ver = cli.get_version().unwrap();
             assert_eq!(ver, "2.3.4".to_string());
         }
+    }
+
+    mod connect_test {
+        use std::io;
+        use std::net::Ipv6Addr;
+
+        use mockall::{predicate, Sequence};
+
+        use crate::parser::{ParseResult, SerialMessage, WiSunEvent};
+        use crate::parser::event::{EventBody, EventKind, PanDescBody};
+        use crate::serial::Error::SerialError;
+        use crate::wisun_module::client::test::new_client;
+        use crate::wisun_module::errors::Error;
+
+        #[test]
+        fn get_ip() {
+            let cli = new_client(|_, _| {});
+            let mac: [u8; 8] = [0x00, 0x1D, 0x12, 0x90, 0x12, 0x34, 0x56, 0x78];
+            let expected = Ipv6Addr::from([
+                0xFE, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x02, 0x1D, 0x12, 0x90, 0x12, 0x34, 0x56, 0x78
+            ]);
+            assert_eq!(expected, cli.get_ip(&mac));
+        }
+
+        #[test]
+        fn scan() {
+            let mut seq = Sequence::new();
+            let mut cli = new_client(|s, p| {
+                s.expect_write_line()
+                    .with(predicate::eq("SKSCAN 2 FFFFFFFF 4"))
+                    .times(1)
+                    .in_sequence(&mut seq)
+                    .returning(|_| Ok(()));
+                p.expect_add_line()
+                    .with(predicate::eq("OK"))
+                    .times(1)
+                    .returning(|_| ParseResult::Ok(SerialMessage::Ok));
+                s.expect_read_line()
+                    .times(1)
+                    .returning(|| Ok(String::from("OK")));
+                s.expect_read_line()
+                    .times(1)
+                    .returning(|| Ok("EVENT 22 FE80:0000:0000:0000:1234:5678:90AB:CDEF".to_string()));
+                p.expect_add_line()
+                    .with(predicate::eq("EVENT 22 FE80:0000:0000:0000:1234:5678:90AB:CDEF"))
+                    .times(1)
+                    .returning(|_| ParseResult::Ok(SerialMessage::Event(WiSunEvent::Event(EventBody {
+                        kind: EventKind::FinishedActiveScan,
+                        sender: "FE80:0000:0000:0000:1234:5678:90AB:CDEF".parse().unwrap(),
+                    }))));
+
+                s.expect_write_line()
+                    .with(predicate::eq("SKSCAN 2 FFFFFFFF 5"))
+                    .times(1)
+                    .in_sequence(&mut seq)
+                    .returning(|_| Ok(()));
+                s.expect_read_line()
+                    .times(1)
+                    .returning(|| Ok(String::from("OK")));
+                p.expect_add_line()
+                    .with(predicate::eq("OK"))
+                    .times(1)
+                    .returning(|_| ParseResult::Ok(SerialMessage::Ok));
+                s.expect_read_line()
+                    .times(1)
+                    .returning(|| Ok(String::from("EPANDESC")));
+                p.expect_add_line()
+                    .with(predicate::eq("EPANDESC"))
+                    .times(1)
+                    .returning(|_| ParseResult::More);
+                s.expect_read_line()
+                    .times(1)
+                    .returning(|| Ok(String::from("  Channel:2F")));
+                p.expect_add_line()
+                    .with(predicate::eq("  Channel:2F"))
+                    .times(1)
+                    .returning(|_| ParseResult::More);
+                s.expect_read_line()
+                    .times(1)
+                    .returning(|| Ok(String::from("  Channel Page:09")));
+                p.expect_add_line()
+                    .with(predicate::eq("  Channel Page:09"))
+                    .times(1)
+                    .returning(|_| ParseResult::More);
+                s.expect_read_line()
+                    .times(1)
+                    .returning(|| Ok(String::from("  Pan ID:3077")));
+                p.expect_add_line()
+                    .with(predicate::eq("  Pan ID:3077"))
+                    .times(1)
+                    .returning(|_| ParseResult::More);
+                s.expect_read_line()
+                    .times(1)
+                    .returning(|| Ok(String::from("  Addr:1234567890ABCDEF")));
+                p.expect_add_line()
+                    .with(predicate::eq("  Addr:1234567890ABCDEF"))
+                    .times(1)
+                    .returning(|_| ParseResult::More);
+                s.expect_read_line()
+                    .times(1)
+                    .returning(|| Ok(String::from("  LQI:73")));
+                p.expect_add_line()
+                    .with(predicate::eq("  LQI:73"))
+                    .times(1)
+                    .returning(|_| ParseResult::More);
+                s.expect_read_line()
+                    .times(1)
+                    .returning(|| Ok(String::from("  PairID:01234567")));
+                p.expect_add_line()
+                    .with(predicate::eq("  PairID:01234567"))
+                    .times(1)
+                    .returning(|_| ParseResult::Ok(
+                        SerialMessage::Event(
+                            WiSunEvent::PanDesc(
+                                PanDescBody {
+                                    channel: 0x20,
+                                    pan_id: 0x3077,
+                                    addr: [0x12, 0x34, 0x56, 0x78, 0x90, 0xAB, 0xCD, 0xEF],
+                                }
+                            )
+                        )
+                    ));
+                s.expect_read_line()
+                    .times(1)
+                    .returning(|| Ok("EVENT 22 FE80:0000:0000:0000:1234:5678:90AB:CDEF".to_string()));
+                p.expect_add_line()
+                    .with(predicate::eq("EVENT 22 FE80:0000:0000:0000:1234:5678:90AB:CDEF"))
+                    .times(1)
+                    .returning(|_| ParseResult::Ok(SerialMessage::Event(WiSunEvent::Event(EventBody {
+                        kind: EventKind::FinishedActiveScan,
+                        sender: "FE80:0000:0000:0000:1234:5678:90AB:CDEF".parse().unwrap(),
+                    }))));
+            });
+            assert_eq!(PanDescBody {
+                channel: 0x20,
+                pan_id: 0x3077,
+                addr: [0x12, 0x34, 0x56, 0x78, 0x90, 0xAB, 0xCD, 0xEF],
+            }, cli.scan().unwrap());
+        }
+        //
+        // #[test]
+        // fn connect_ok(){
+        //     let mut cli = new_client(|s, p| {
+        //
+        //     });
+        //
+        // }
     }
 }
