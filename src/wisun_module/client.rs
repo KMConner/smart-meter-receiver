@@ -177,7 +177,6 @@ impl<T: Connection, S: Parser> WiSunClient<T, S> {
             let line = format!("SKSCAN 2 FFFFFFFF {}", i);
             self.serial_connection.write_line(line.as_str())?;
             self.wait_ok()?;
-            log::debug!("wait OK OK ");
             self.wait_fn(|m| -> bool{
                 match m {
                     SerialMessage::Event(WiSunEvent::Event(e)) => {
