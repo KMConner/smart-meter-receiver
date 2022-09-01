@@ -1,4 +1,4 @@
-mod event;
+pub mod event;
 mod parser;
 mod messages;
 mod traits;
