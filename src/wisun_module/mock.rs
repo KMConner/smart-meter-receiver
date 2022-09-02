@@ -16,6 +16,7 @@ mock! {
 
     impl Connection for Serial {
         fn write_line(&mut self, line: &str) -> crate::serial::errors::Result<()>;
+        fn write_byte(&mut self, data: &[u8]) -> crate::serial::errors::Result<()>;
         fn read_line(&mut self) -> crate::serial::errors::Result<String>;
     }
 }

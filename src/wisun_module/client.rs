@@ -10,6 +10,7 @@ pub struct WiSunClient<T: Connection, S: Parser> {
     serial_connection: T,
     serial_parser: S,
     message_buffer: Vec<SerialMessage>,
+    address: Option<Ipv6Addr>,
 }
 
 impl<T: Connection> WiSunClient<T, WiSunModuleParser> {
@@ -18,6 +19,7 @@ impl<T: Connection> WiSunClient<T, WiSunModuleParser> {
             serial_connection,
             serial_parser: WiSunModuleParser::new(),
             message_buffer: Vec::new(),
+            address: None,
         };
         client.ensure_echoback_off()?;
         Ok(client)
@@ -153,7 +155,9 @@ impl<T: Connection, S: Parser> WiSunClient<T, S> {
         self.set_register("S2", channel.as_str())?;
         self.set_register("S3", pan_id.as_str())?;
         let ip = self.get_ip(&pan.addr);
-        self.join(&ip)
+        self.join(&ip)?;
+        self.address = Some(ip);
+        Ok(())
     }
 
     fn set_password(&mut self, password: &str) -> Result<()> {
@@ -275,6 +279,7 @@ mod test {
             serial_connection: mock_serial,
             serial_parser: mock_parser,
             message_buffer: Vec::new(),
+            address: None,
         }
     }
 

@@ -31,6 +31,14 @@ impl<T: ReadWrite> Connection for ConnectionImpl<T> {
         Ok(())
     }
 
+    fn write_byte(&mut self, data: &[u8]) -> Result<()> {
+        self.connection.write(data)?;
+        self.connection.write(b"\r\n")?;
+        self.connection.flush()?;
+        log::trace!("Serial Input(byte): {}", hex::encode(data));
+        Ok(())
+    }
+
     fn read_line(&mut self) -> Result<String> {
         let mut txt = Vec::new();
         loop {
