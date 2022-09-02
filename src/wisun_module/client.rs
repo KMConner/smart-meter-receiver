@@ -1,10 +1,13 @@
 use std::io;
 use std::net::Ipv6Addr;
+use std::time::{Duration, SystemTime};
 
 use crate::parser::{Parser, ParseResult, SerialMessage, WiSunEvent, WiSunModuleParser};
 use crate::parser::event::{EventKind, PanDescBody};
 use crate::serial::{Connection, Error as SerialError};
 use crate::wisun_module::errors::{Error, Result};
+
+const ECHONET_PORT: u16 = 3610;
 
 pub struct WiSunClient<T: Connection, S: Parser> {
     serial_connection: T,
@@ -96,7 +99,7 @@ impl<T: Connection, S: Parser> WiSunClient<T, S> {
         None
     }
 
-    fn wait_fn<F, H>(&mut self, pred: F, err_if: H) -> Result<SerialMessage>
+    fn wait_fn<F, H>(&mut self, pred: F, err_if: H, timeout: Option<Duration>) -> Result<SerialMessage>
         where F: Fn(&SerialMessage) -> bool, H: Fn(&SerialMessage) -> Option<String> {
 
         // Search on message_buffer
@@ -104,8 +107,18 @@ impl<T: Connection, S: Parser> WiSunClient<T, S> {
             return Ok(m);
         }
 
+        let start = SystemTime::now();
+
         // get new message from console
         loop {
+            match timeout {
+                Some(t) => {
+                    if SystemTime::now() > start + t {
+                        return Err(Error::TimeoutError());
+                    }
+                }
+                None => {}
+            }
             if self.get_message()? {
                 if let Some(m) = self.message_buffer.last() {
                     if pred(m) {
@@ -120,7 +133,7 @@ impl<T: Connection, S: Parser> WiSunClient<T, S> {
     }
 
     fn wait_ok(&mut self) -> Result<()> {
-        self.wait_fn(|m| *m == SerialMessage::Ok, err_when_fail)?;
+        self.wait_fn(|m| *m == SerialMessage::Ok, err_when_fail, None)?;
         Ok(())
     }
 
@@ -139,7 +152,7 @@ impl<T: Connection, S: Parser> WiSunClient<T, S> {
                 SerialMessage::Event(WiSunEvent::Version(_)) => true,
                 _ => false,
             }
-        }, err_when_fail)?;
+        }, err_when_fail, None)?;
         if let SerialMessage::Event(WiSunEvent::Version(ver)) = msg {
             return Ok(ver);
         }
@@ -188,7 +201,7 @@ impl<T: Connection, S: Parser> WiSunClient<T, S> {
                     }
                     _ => false,
                 }
-            }, err_when_fail)?;
+            }, err_when_fail, None)?;
             let desc = self.search_on_buffer(&|m| -> bool{
                 match m {
                     SerialMessage::Event(WiSunEvent::PanDesc(_)) => true,
@@ -225,7 +238,7 @@ impl<T: Connection, S: Parser> WiSunClient<T, S> {
                              }
                              _ => None
                          }
-                     })?;
+                     }, None)?;
         Ok(())
     }
 
@@ -244,6 +257,29 @@ impl<T: Connection, S: Parser> WiSunClient<T, S> {
         ip[8] ^= 0b00000010;
         ip.into()
     }
+
+    fn send_udp(&mut self, data: &[u8]) -> Result<()> {
+        let addr = match self.address {
+            Some(a) => a,
+            None => {
+                return Err(Error::CommandError("address is not set".to_string()));
+            }
+        };
+        self.flush_messages();
+        let security_bit = 1u8;
+        let data_base = create_send_udp_base(&addr, security_bit, data.len());
+        let mut bin: Vec<u8> = Vec::new();
+        bin.extend_from_slice(data_base.as_bytes());
+        bin.extend_from_slice(data);
+        bin.extend_from_slice("\r\n".as_bytes());
+
+        self.serial_connection.write_byte(bin.as_slice())?;
+        self.wait_ok()
+    }
+}
+
+fn create_send_udp_base(addr: &Ipv6Addr, security_bit: u8, data_length: usize) -> String {
+    format!("SKSENDTO 1 {} {:04X} {} {:04X}", ipv6_addr_full_string(addr), ECHONET_PORT, security_bit, data_length)
 }
 
 fn err_when_fail(m: &SerialMessage) -> Option<String> {
@@ -263,7 +299,8 @@ fn ipv6_addr_full_string(ip: &Ipv6Addr) -> String {
 mod test {
     use std::net::Ipv6Addr;
     use std::str::FromStr;
-    use crate::wisun_module::client::ipv6_addr_full_string;
+
+    use crate::wisun_module::client::{create_send_udp_base, ipv6_addr_full_string};
     use crate::wisun_module::mock::{MockSerial, MockSerialParser};
 
     use super::WiSunClient;
@@ -589,5 +626,13 @@ mod test {
     fn ipv6_addr_full_string_test() {
         let ip = Ipv6Addr::from_str("FE80:0000:0000:0000:1234:5678:90AB:CDEF").unwrap();
         assert_eq!(ipv6_addr_full_string(&ip), "FE80:0000:0000:0000:1234:5678:90AB:CDEF".to_string());
+    }
+
+    #[test]
+    fn create_send_udp_base_test() {
+        let addr = Ipv6Addr::from_str("FE80:0000:0000:0000:1234:5678:90AB:CDEF").unwrap();
+
+        assert_eq!(create_send_udp_base(&addr, 1, 30),
+                   "SKSENDTO 1 FE80:0000:0000:0000:1234:5678:90AB:CDEF 0E1A 1 001E");
     }
 }

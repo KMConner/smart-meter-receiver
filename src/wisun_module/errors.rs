@@ -9,6 +9,8 @@ pub enum Error {
     CommandError(String),
     #[error("failed to scan pan: {0}")]
     ScanError(String),
+    #[error("timeout")]
+    TimeoutError(),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
