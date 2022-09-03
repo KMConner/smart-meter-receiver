@@ -8,6 +8,9 @@ pub enum Error {
 
     #[error("unknown value: {0}")]
     InvalidValueError(String),
+
+    #[error("invalid echonet object id: {0}")]
+    InvalidEchonetObjectId(String),
 }
 
 impl From<TryFromSliceError> for Error {
