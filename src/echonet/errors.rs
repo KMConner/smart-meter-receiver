@@ -5,6 +5,9 @@ use thiserror::Error as ThisError;
 pub enum Error {
     #[error("failed to parse binary data {0}")]
     ParseError(String),
+
+    #[error("unknown value: {0}")]
+    InvalidValueError(String),
 }
 
 impl From<TryFromSliceError> for Error {

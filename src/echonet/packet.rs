@@ -2,11 +2,22 @@ use std::mem;
 use crate::echonet::{Error, Result};
 use std::convert::TryInto;
 
+const ECHONET_LITE_EHD1: u8 = 0x10;
+const ECHONET_FORMAT_1: u8 = 0x81;
+
+#[derive(PartialEq, Debug)]
 struct EchonetPacket {
     ehd1: u8,
     ehd2: u8,
     tid: u16,
     edata: Edata,
+}
+
+#[repr(packed)]
+struct EchonetPacketHeader {
+    ehd1: u8,
+    ehd2: u8,
+    tid: u16,
 }
 
 #[derive(PartialEq, Debug)]
@@ -30,6 +41,31 @@ struct EdataHeader {
 struct Property {
     epc: u8,
     data: Vec<u8>,
+}
+
+impl EchonetPacket {
+    fn parse(bin: &[u8]) -> Result<Self> {
+        if bin.len() < 4 {
+            return Err(Error::ParseError(String::from("data length too short")));
+        }
+
+        let header: [u8; 4] = bin[..4].try_into()?;
+        let header: EchonetPacketHeader = unsafe { mem::transmute(header) };
+        if header.ehd1 != ECHONET_LITE_EHD1 {
+            return Err(Error::InvalidValueError(String::from("EHD1 MUST BE 0x10")));
+        }
+        if header.ehd2 != ECHONET_FORMAT_1 {
+            return Err(Error::InvalidValueError(String::from("EHD2 MUST BE 0x10")));
+        }
+
+        let edata = Edata::parse(&bin[4..])?;
+        Ok(EchonetPacket {
+            ehd1: header.ehd1,
+            ehd2: header.ehd2,
+            tid: header.tid,
+            edata,
+        })
+    }
 }
 
 impl Edata {
@@ -82,6 +118,53 @@ impl Property {
 
 #[cfg(test)]
 mod test {
+    mod packet_test {
+        use crate::echonet::packet::{EchonetPacket, Edata, Property};
+
+        #[test]
+        fn parse_test() {
+            #[cfg(target_endian = "big")]
+                let tid = 0x0001;
+
+            #[cfg(target_endian = "little")]
+                let tid = 0x0100;
+
+            let bin = hex::decode("1081000102880105FF017202E7040000020EE7040000020F").unwrap();
+            let expected = EchonetPacket {
+                ehd1: 0x10,
+                ehd2: 0x81,
+                tid,
+                edata: Edata {
+                    seoj: [0x02, 0x88, 0x01],
+                    deoj: [0x05, 0xFF, 0x01],
+                    esv: 0x72,
+                    opc: 0x02,
+                    data: vec![Property { epc: 0xE7, data: hex::decode("0000020E").unwrap() },
+                               Property { epc: 0xE7, data: hex::decode("0000020F").unwrap() }],
+                },
+            };
+            assert_eq!(EchonetPacket::parse(bin.as_slice()).unwrap(), expected);
+        }
+
+        #[test]
+        fn parse_invalid_ehd1() {
+            let bin = hex::decode("1181000102880105FF017202E7040000020EE7040000020F").unwrap();
+            assert_eq!(EchonetPacket::parse(bin.as_slice()).is_err(), true);
+        }
+
+        #[test]
+        fn parse_invalid_ehd2() {
+            let bin = hex::decode("1082000102880105FF017202E7040000020EE7040000020F").unwrap();
+            assert_eq!(EchonetPacket::parse(bin.as_slice()).is_err(), true);
+        }
+
+        #[test]
+        fn parse_error_too_short_1() {
+            let bin = hex::decode("10810001").unwrap();
+            assert_eq!(EchonetPacket::parse(bin.as_slice()).is_err(), true);
+        }
+    }
+
     mod edata_test {
         use crate::echonet::packet::{Edata, Property};
 
