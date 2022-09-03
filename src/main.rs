@@ -1,3 +1,4 @@
+mod echonet;
 mod parser;
 mod serial;
 mod wisun_module;
