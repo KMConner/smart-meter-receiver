@@ -1,3 +1,5 @@
+extern crate core;
+
 mod echonet;
 mod parser;
 mod serial;

@@ -97,6 +97,24 @@ impl Edata {
 
         Ok(edata)
     }
+
+    fn dump(&self) -> Vec<u8> {
+        let header = EdataHeader {
+            seoj: self.seoj,
+            deoj: self.deoj,
+            esv: self.esv,
+            opc: self.opc,
+        };
+
+        let header: [u8; 8] = unsafe { mem::transmute(header) };
+        let mut bin = Vec::new();
+        bin.extend(header.iter());
+        for d in &self.data {
+            bin.extend(d.dump().iter());
+        }
+
+        bin
+    }
 }
 
 impl Property {
@@ -195,6 +213,20 @@ mod test {
         fn parse_test_less_property() {
             let bin = hex::decode("02880105FF017202E7040000020E").unwrap();
             assert_eq!(Edata::parse(bin.as_slice()).is_err(), true);
+        }
+
+        #[test]
+        fn dump_test() {
+            let data = Edata {
+                seoj: [0x02, 0x88, 0x01],
+                deoj: [0x05, 0xFF, 0x01],
+                esv: 0x72,
+                opc: 0x02,
+                data: vec![Property { epc: 0xE7, data: hex::decode("0000020E").unwrap() },
+                           Property { epc: 0xE7, data: hex::decode("0000020F").unwrap() }],
+            };
+            let bin = hex::decode("02880105FF017202E7040000020EE7040000020F").unwrap();
+            assert_eq!(data.dump(), bin);
         }
     }
 
