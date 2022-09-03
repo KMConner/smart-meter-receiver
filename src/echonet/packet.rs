@@ -205,6 +205,31 @@ mod test {
             let bin = hex::decode("10810001").unwrap();
             assert_eq!(EchonetPacket::parse(bin.as_slice()).is_err(), true);
         }
+
+        #[test]
+        fn dump_test() {
+            #[cfg(target_endian = "big")]
+                let tid = 0x0001;
+
+            #[cfg(target_endian = "little")]
+                let tid = 0x0100;
+
+            let bin = hex::decode("1081000102880105FF017202E7040000020EE7040000020F").unwrap();
+            let packet = EchonetPacket {
+                ehd1: 0x10,
+                ehd2: 0x81,
+                tid,
+                edata: Edata {
+                    seoj: [0x02, 0x88, 0x01],
+                    deoj: [0x05, 0xFF, 0x01],
+                    esv: 0x72,
+                    opc: 0x02,
+                    data: vec![Property { epc: 0xE7, data: hex::decode("0000020E").unwrap() },
+                               Property { epc: 0xE7, data: hex::decode("0000020F").unwrap() }],
+                },
+            };
+            assert_eq!(bin, packet.dump());
+        }
     }
 
     mod edata_test {
