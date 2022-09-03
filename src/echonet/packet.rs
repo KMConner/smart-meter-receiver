@@ -66,6 +66,20 @@ impl EchonetPacket {
             edata,
         })
     }
+
+    fn dump(&self) -> Vec<u8> {
+        let header = EchonetPacketHeader {
+            ehd1: self.ehd1,
+            ehd2: self.ehd2,
+            tid: self.tid,
+        };
+
+        let mut bin = Vec::new();
+        let header: [u8; 4] = unsafe { mem::transmute(header) };
+        bin.extend(header.iter());
+        bin.extend(self.edata.dump());
+        bin
+    }
 }
 
 impl Edata {
