@@ -2,12 +2,13 @@ use std::convert::TryInto;
 use std::mem;
 
 use crate::echonet::{Error, Result};
+use crate::echonet::enums::EchonetObject;
 
 const ECHONET_LITE_EHD1: u8 = 0x10;
 const ECHONET_FORMAT_1: u8 = 0x81;
 
 #[derive(PartialEq, Debug)]
-struct EchonetPacket {
+pub struct EchonetPacket {
     ehd1: u8,
     ehd2: u8,
     tid: u16,
@@ -22,9 +23,9 @@ struct EchonetPacketHeader {
 }
 
 #[derive(PartialEq, Debug)]
-struct Edata {
-    seoj: [u8; 3],
-    deoj: [u8; 3],
+pub struct Edata {
+    seoj: EchonetObject,
+    deoj: EchonetObject,
     esv: u8,
     opc: u8,
     data: Vec<Property>,
@@ -39,13 +40,13 @@ struct EdataHeader {
 }
 
 #[derive(PartialEq, Debug)]
-struct Property {
+pub struct Property {
     epc: u8,
     data: Vec<u8>,
 }
 
 impl EchonetPacket {
-    fn parse(bin: &[u8]) -> Result<Self> {
+    pub fn parse(bin: &[u8]) -> Result<Self> {
         if bin.len() < 4 {
             return Err(Error::ParseError(String::from("data length too short")));
         }
@@ -68,7 +69,7 @@ impl EchonetPacket {
         })
     }
 
-    fn dump(&self) -> Vec<u8> {
+    pub fn dump(&self) -> Vec<u8> {
         let header = EchonetPacketHeader {
             ehd1: self.ehd1,
             ehd2: self.ehd2,
@@ -93,8 +94,8 @@ impl Edata {
 
         let header: EdataHeader = unsafe { mem::transmute(header) };
         let mut edata = Edata {
-            seoj: header.seoj,
-            deoj: header.deoj,
+            seoj: header.seoj.try_into()?,
+            deoj: header.deoj.try_into()?,
             esv: header.esv,
             opc: header.opc,
             data: Vec::new(),
@@ -115,8 +116,8 @@ impl Edata {
 
     fn dump(&self) -> Vec<u8> {
         let header = EdataHeader {
-            seoj: self.seoj,
-            deoj: self.deoj,
+            seoj: self.seoj.into(),
+            deoj: self.deoj.into(),
             esv: self.esv,
             opc: self.opc,
         };
@@ -161,6 +162,7 @@ impl Property {
 #[cfg(test)]
 mod test {
     mod packet_test {
+        use crate::echonet::enums::EchonetObject;
         use crate::echonet::packet::{EchonetPacket, Edata, Property};
 
         #[test]
@@ -177,8 +179,8 @@ mod test {
                 ehd2: 0x81,
                 tid,
                 edata: Edata {
-                    seoj: [0x02, 0x88, 0x01],
-                    deoj: [0x05, 0xFF, 0x01],
+                    seoj: EchonetObject::SmartMeter,
+                    deoj: EchonetObject::HemsController,
                     esv: 0x72,
                     opc: 0x02,
                     data: vec![Property { epc: 0xE7, data: hex::decode("0000020E").unwrap() },
@@ -220,8 +222,8 @@ mod test {
                 ehd2: 0x81,
                 tid,
                 edata: Edata {
-                    seoj: [0x02, 0x88, 0x01],
-                    deoj: [0x05, 0xFF, 0x01],
+                    seoj: EchonetObject::SmartMeter,
+                    deoj: EchonetObject::HemsController,
                     esv: 0x72,
                     opc: 0x02,
                     data: vec![Property { epc: 0xE7, data: hex::decode("0000020E").unwrap() },
@@ -233,14 +235,15 @@ mod test {
     }
 
     mod edata_test {
+        use crate::echonet::enums::EchonetObject;
         use crate::echonet::packet::{Edata, Property};
 
         #[test]
         fn parse_test() {
             let bin = hex::decode("02880105FF017202E7040000020EE7040000020F").unwrap();
             let expected = Edata {
-                seoj: [0x02, 0x88, 0x01],
-                deoj: [0x05, 0xFF, 0x01],
+                seoj: EchonetObject::SmartMeter,
+                deoj: EchonetObject::HemsController,
                 esv: 0x72,
                 opc: 0x02,
                 data: vec![Property { epc: 0xE7, data: hex::decode("0000020E").unwrap() },
@@ -258,8 +261,8 @@ mod test {
         #[test]
         fn dump_test() {
             let data = Edata {
-                seoj: [0x02, 0x88, 0x01],
-                deoj: [0x05, 0xFF, 0x01],
+                seoj: EchonetObject::SmartMeter,
+                deoj: EchonetObject::HemsController,
                 esv: 0x72,
                 opc: 0x02,
                 data: vec![Property { epc: 0xE7, data: hex::decode("0000020E").unwrap() },
