@@ -9,14 +9,14 @@ use crate::wisun_module::errors::{Error, Result};
 
 const ECHONET_PORT: u16 = 3610;
 
-pub struct WiSunClient<T: Connection, S: Parser> {
+pub struct WiSunClient<T: Connection> {
     serial_connection: T,
-    serial_parser: S,
+    serial_parser: WiSunModuleParser,
     message_buffer: Vec<SerialMessage>,
     address: Option<Ipv6Addr>,
 }
 
-impl<T: Connection> WiSunClient<T, WiSunModuleParser> {
+impl<T: Connection> WiSunClient<T> {
     pub fn new(serial_connection: T) -> Result<Self> {
         let mut client = WiSunClient {
             serial_connection,
@@ -27,9 +27,7 @@ impl<T: Connection> WiSunClient<T, WiSunModuleParser> {
         client.ensure_echoback_off()?;
         Ok(client)
     }
-}
 
-impl<T: Connection, S: Parser> WiSunClient<T, S> {
     fn get_message(&mut self) -> Result<bool> {
         loop {
             match self.serial_connection.read_line() {
@@ -299,22 +297,22 @@ fn ipv6_addr_full_string(ip: &Ipv6Addr) -> String {
 mod test {
     use std::net::Ipv6Addr;
     use std::str::FromStr;
+    use crate::parser::WiSunModuleParser;
 
     use crate::wisun_module::client::{create_send_udp_base, ipv6_addr_full_string};
-    use crate::wisun_module::mock::{MockSerial, MockSerialParser};
+    use crate::wisun_module::mock::MockSerial;
 
     use super::WiSunClient;
 
-    fn new_client<F>(mut prepare_mock: F) -> WiSunClient<MockSerial, MockSerialParser>
+    fn new_client<F>(mut prepare_mock: F) -> WiSunClient<MockSerial>
         where
-            F: FnMut(&mut MockSerial, &mut MockSerialParser),
+            F: FnMut(&mut MockSerial),
     {
         let mut mock_serial = MockSerial::new();
-        let mut mock_parser = MockSerialParser::new();
-        prepare_mock(&mut mock_serial, &mut mock_parser);
+        prepare_mock(&mut mock_serial);
         WiSunClient {
             serial_connection: mock_serial,
-            serial_parser: mock_parser,
+            serial_parser: WiSunModuleParser::new(),
             message_buffer: Vec::new(),
             address: None,
         }
@@ -325,20 +323,16 @@ mod test {
 
         use mockall::Sequence;
 
-        use crate::parser::{ParseResult, SerialMessage};
         use crate::serial::Error as SerialError;
 
         use super::*;
 
         #[test]
         fn ok_when_read_ok() {
-            let mut cli = new_client(|s, p| -> () {
+            let mut cli = new_client(|s| -> () {
                 s.expect_read_line()
                     .times(1)
                     .returning(|| Ok(String::from("OK")));
-                p.expect_add_line()
-                    .times(1)
-                    .returning(|_| ParseResult::Ok(SerialMessage::Ok));
             });
             cli.wait_ok().unwrap();
         }
@@ -346,29 +340,20 @@ mod test {
         #[test]
         fn read_again_when_not_ok() {
             let mut seq = Sequence::new();
-            let mut cli = new_client(|s, p| -> () {
+            let mut cli = new_client(|s| -> () {
                 s.expect_read_line()
                     .times(1)
                     .in_sequence(&mut seq)
                     .returning(|| Ok(String::from("SKVER")));
-                p.expect_add_line()
-                    .times(1)
-                    .returning(|_| ParseResult::Err(String::from("SKVER")));
                 s.expect_read_line()
                     .times(1)
                     .in_sequence(&mut seq)
                     .returning(|| Ok(String::from("SKVER")));
-                p.expect_add_line()
-                    .times(1)
-                    .returning(|_| ParseResult::Err(String::from("SKVER")));
 
                 s.expect_read_line()
                     .times(1)
                     .in_sequence(&mut seq)
                     .returning(|| Ok(String::from("OK")));
-                p.expect_add_line()
-                    .times(1)
-                    .returning(|_| ParseResult::Ok(SerialMessage::Ok));
             });
             cli.wait_ok().unwrap();
         }
@@ -376,7 +361,7 @@ mod test {
         #[test]
         fn read_again_when_timeout() {
             let mut seq = Sequence::new();
-            let mut cli = new_client(|s, p| -> () {
+            let mut cli = new_client(|s| -> () {
                 s.expect_read_line()
                     .times(1)
                     .in_sequence(&mut seq)
@@ -390,9 +375,6 @@ mod test {
                     .times(1)
                     .in_sequence(&mut seq)
                     .returning(|| Ok(String::from("OK")));
-                p.expect_add_line()
-                    .times(1)
-                    .returning(|_| ParseResult::Ok(SerialMessage::Ok));
             });
             cli.wait_ok().unwrap();
         }
@@ -400,22 +382,16 @@ mod test {
         #[test]
         fn error_when_fail() {
             let mut seq = Sequence::new();
-            let mut cli = new_client(|s, p| -> () {
+            let mut cli = new_client(|s| -> () {
                 s.expect_read_line()
                     .times(1)
                     .in_sequence(&mut seq)
                     .returning(|| Ok(String::from("SKVER")));
-                p.expect_add_line()
-                    .times(1)
-                    .returning(|_| ParseResult::Err(String::from("SKVER")));
 
                 s.expect_read_line()
                     .times(1)
                     .in_sequence(&mut seq)
                     .returning(|| Ok(String::from("FAIL ER04")));
-                p.expect_add_line()
-                    .times(1)
-                    .returning(|_| ParseResult::Ok(SerialMessage::Fail("ER04".to_string())));
             });
             assert_eq!(cli.wait_ok().is_err(), true);
         }
@@ -424,14 +400,12 @@ mod test {
     mod get_version_test {
         use mockall::{predicate, Sequence};
 
-        use crate::parser::{ParseResult, SerialMessage, WiSunEvent};
-
         use super::*;
 
         #[test]
         fn ok_before_ever() {
             let mut seq = Sequence::new();
-            let mut cli = new_client(|s, p| -> () {
+            let mut cli = new_client(|s| -> () {
                 s.expect_write_line()
                     .with(predicate::eq("SKVER"))
                     .times(1)
@@ -440,17 +414,9 @@ mod test {
                 s.expect_read_line()
                     .times(1)
                     .returning(|| Ok(String::from("OK")));
-                p.expect_add_line()
-                    .with(predicate::eq("OK"))
-                    .times(1)
-                    .returning(|_| ParseResult::Ok(SerialMessage::Ok));
                 s.expect_read_line()
                     .times(1)
                     .returning(|| Ok(String::from("EVER 1.2.3")));
-                p.expect_add_line()
-                    .with(predicate::eq("EVER 1.2.3"))
-                    .times(1)
-                    .returning(|_| ParseResult::Ok(SerialMessage::Event(WiSunEvent::Version("1.2.3".to_string()))));
             });
             let ver = cli.get_version().unwrap();
             assert_eq!(ver, "1.2.3".to_string());
@@ -459,7 +425,7 @@ mod test {
         #[test]
         fn ever_before_ok() {
             let mut seq = Sequence::new();
-            let mut cli = new_client(|s, p| -> () {
+            let mut cli = new_client(|s| -> () {
                 s.expect_write_line()
                     .with(predicate::eq("SKVER"))
                     .times(1)
@@ -468,17 +434,9 @@ mod test {
                 s.expect_read_line()
                     .times(1)
                     .returning(|| Ok(String::from("EVER 2.3.4")));
-                p.expect_add_line()
-                    .with(predicate::eq("EVER 2.3.4"))
-                    .times(1)
-                    .returning(|_| ParseResult::Ok(SerialMessage::Event(WiSunEvent::Version("2.3.4".to_string()))));
                 s.expect_read_line()
                     .times(1)
                     .returning(|| Ok(String::from("OK")));
-                p.expect_add_line()
-                    .with(predicate::eq("OK"))
-                    .times(1)
-                    .returning(|_| ParseResult::Ok(SerialMessage::Ok));
             });
             let ver = cli.get_version().unwrap();
             assert_eq!(ver, "2.3.4".to_string());
@@ -490,13 +448,12 @@ mod test {
 
         use mockall::{predicate, Sequence};
 
-        use crate::parser::{ParseResult, SerialMessage, WiSunEvent};
-        use crate::parser::event::{EventBody, EventKind, PanDescBody};
+        use crate::parser::event::PanDescBody;
         use crate::wisun_module::client::test::new_client;
 
         #[test]
         fn get_ip() {
-            let cli = new_client(|_, _| {});
+            let cli = new_client(|_| {});
             let mac: [u8; 8] = [0x00, 0x1D, 0x12, 0x90, 0x12, 0x34, 0x56, 0x78];
             let expected = Ipv6Addr::from([
                 0xFE, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -508,29 +465,18 @@ mod test {
         #[test]
         fn scan() {
             let mut seq = Sequence::new();
-            let mut cli = new_client(|s, p| {
+            let mut cli = new_client(|s| {
                 s.expect_write_line()
                     .with(predicate::eq("SKSCAN 2 FFFFFFFF 4"))
                     .times(1)
                     .in_sequence(&mut seq)
                     .returning(|_| Ok(()));
-                p.expect_add_line()
-                    .with(predicate::eq("OK"))
-                    .times(1)
-                    .returning(|_| ParseResult::Ok(SerialMessage::Ok));
                 s.expect_read_line()
                     .times(1)
                     .returning(|| Ok(String::from("OK")));
                 s.expect_read_line()
                     .times(1)
                     .returning(|| Ok("EVENT 22 FE80:0000:0000:0000:1234:5678:90AB:CDEF".to_string()));
-                p.expect_add_line()
-                    .with(predicate::eq("EVENT 22 FE80:0000:0000:0000:1234:5678:90AB:CDEF"))
-                    .times(1)
-                    .returning(|_| ParseResult::Ok(SerialMessage::Event(WiSunEvent::Event(EventBody {
-                        kind: EventKind::FinishedActiveScan,
-                        sender: "FE80:0000:0000:0000:1234:5678:90AB:CDEF".parse().unwrap(),
-                    }))));
 
                 s.expect_write_line()
                     .with(predicate::eq("SKSCAN 2 FFFFFFFF 5"))
@@ -540,82 +486,33 @@ mod test {
                 s.expect_read_line()
                     .times(1)
                     .returning(|| Ok(String::from("OK")));
-                p.expect_add_line()
-                    .with(predicate::eq("OK"))
-                    .times(1)
-                    .returning(|_| ParseResult::Ok(SerialMessage::Ok));
                 s.expect_read_line()
                     .times(1)
                     .returning(|| Ok(String::from("EPANDESC")));
-                p.expect_add_line()
-                    .with(predicate::eq("EPANDESC"))
-                    .times(1)
-                    .returning(|_| ParseResult::More);
                 s.expect_read_line()
                     .times(1)
                     .returning(|| Ok(String::from("  Channel:2F")));
-                p.expect_add_line()
-                    .with(predicate::eq("  Channel:2F"))
-                    .times(1)
-                    .returning(|_| ParseResult::More);
                 s.expect_read_line()
                     .times(1)
                     .returning(|| Ok(String::from("  Channel Page:09")));
-                p.expect_add_line()
-                    .with(predicate::eq("  Channel Page:09"))
-                    .times(1)
-                    .returning(|_| ParseResult::More);
                 s.expect_read_line()
                     .times(1)
                     .returning(|| Ok(String::from("  Pan ID:3077")));
-                p.expect_add_line()
-                    .with(predicate::eq("  Pan ID:3077"))
-                    .times(1)
-                    .returning(|_| ParseResult::More);
                 s.expect_read_line()
                     .times(1)
                     .returning(|| Ok(String::from("  Addr:1234567890ABCDEF")));
-                p.expect_add_line()
-                    .with(predicate::eq("  Addr:1234567890ABCDEF"))
-                    .times(1)
-                    .returning(|_| ParseResult::More);
                 s.expect_read_line()
                     .times(1)
                     .returning(|| Ok(String::from("  LQI:73")));
-                p.expect_add_line()
-                    .with(predicate::eq("  LQI:73"))
-                    .times(1)
-                    .returning(|_| ParseResult::More);
                 s.expect_read_line()
                     .times(1)
                     .returning(|| Ok(String::from("  PairID:01234567")));
-                p.expect_add_line()
-                    .with(predicate::eq("  PairID:01234567"))
-                    .times(1)
-                    .returning(|_| ParseResult::Ok(
-                        SerialMessage::Event(
-                            WiSunEvent::PanDesc(
-                                PanDescBody {
-                                    channel: 0x20,
-                                    pan_id: 0x3077,
-                                    addr: [0x12, 0x34, 0x56, 0x78, 0x90, 0xAB, 0xCD, 0xEF],
-                                }
-                            )
-                        )
-                    ));
                 s.expect_read_line()
                     .times(1)
                     .returning(|| Ok("EVENT 22 FE80:0000:0000:0000:1234:5678:90AB:CDEF".to_string()));
-                p.expect_add_line()
-                    .with(predicate::eq("EVENT 22 FE80:0000:0000:0000:1234:5678:90AB:CDEF"))
-                    .times(1)
-                    .returning(|_| ParseResult::Ok(SerialMessage::Event(WiSunEvent::Event(EventBody {
-                        kind: EventKind::FinishedActiveScan,
-                        sender: "FE80:0000:0000:0000:1234:5678:90AB:CDEF".parse().unwrap(),
-                    }))));
             });
             assert_eq!(PanDescBody {
-                channel: 0x20,
+                channel: 0x2F,
                 pan_id: 0x3077,
                 addr: [0x12, 0x34, 0x56, 0x78, 0x90, 0xAB, 0xCD, 0xEF],
             }, cli.scan().unwrap());
