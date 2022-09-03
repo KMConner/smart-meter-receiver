@@ -114,6 +114,15 @@ impl Property {
         let ret = Property { epc, data };
         Ok((2 + pdc, ret))
     }
+
+    fn dump(&self) -> Vec<u8> {
+        let mut data = Vec::with_capacity(self.data.len() + 2);
+        data.push(self.epc);
+        data.push(self.data.len() as u8);
+        data.extend_from_slice(self.data.as_slice());
+
+        data
+    }
 }
 
 #[cfg(test)]
@@ -220,6 +229,13 @@ mod test {
         fn parse_error_on_insufficient_length() {
             let bin = hex::decode("E704000002").unwrap();
             assert_eq!(Property::parse(bin.as_slice()).is_err(), true);
+        }
+
+        #[test]
+        fn dump_test() {
+            let bin = hex::decode("E7040000020E").unwrap();
+            let property = Property { epc: 0xE7, data: hex::decode("0000020E").unwrap() };
+            assert_eq!(bin, property.dump());
         }
     }
 }
