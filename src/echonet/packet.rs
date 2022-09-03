@@ -1,6 +1,7 @@
-use std::mem;
-use crate::echonet::{Error, Result};
 use std::convert::TryInto;
+use std::mem;
+
+use crate::echonet::{Error, Result};
 
 const ECHONET_LITE_EHD1: u8 = 0x10;
 const ECHONET_FORMAT_1: u8 = 0x81;
