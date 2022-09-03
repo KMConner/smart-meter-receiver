@@ -1,12 +1,15 @@
+use std::mem;
 use crate::echonet::{Error, Result};
+use std::convert::TryInto;
 
 struct EchonetPacket {
     ehd1: u8,
     ehd2: u8,
     tid: u16,
-    edaata: Edata,
+    edata: Edata,
 }
 
+#[derive(PartialEq, Debug)]
 struct Edata {
     seoj: [u8; 3],
     deoj: [u8; 3],
@@ -15,10 +18,49 @@ struct Edata {
     data: Vec<Property>,
 }
 
+#[repr(packed)]
+struct EdataHeader {
+    seoj: [u8; 3],
+    deoj: [u8; 3],
+    esv: u8,
+    opc: u8,
+}
+
 #[derive(PartialEq, Debug)]
 struct Property {
     epc: u8,
     data: Vec<u8>,
+}
+
+impl Edata {
+    fn parse(bin: &[u8]) -> Result<Self> {
+        if bin.len() < 8 {
+            return Err(Error::ParseError(String::from("data length too short")));
+        }
+
+        let header: [u8; 8] = bin[..8].try_into()?;
+
+        let header: EdataHeader = unsafe { mem::transmute(header) };
+        let mut edata = Edata {
+            seoj: header.seoj,
+            deoj: header.deoj,
+            esv: header.esv,
+            opc: header.opc,
+            data: Vec::new(),
+        };
+
+        let mut pos = 8;
+        for _ in 0..header.opc {
+            if pos >= bin.len() {
+                return Err(Error::ParseError(String::from("data length too short")));
+            }
+            let (num, prop) = Property::parse(&bin[pos..])?;
+            pos += num;
+            edata.data.push(prop);
+        }
+
+        Ok(edata)
+    }
 }
 
 impl Property {
@@ -40,6 +82,30 @@ impl Property {
 
 #[cfg(test)]
 mod test {
+    mod edata_test {
+        use crate::echonet::packet::{Edata, Property};
+
+        #[test]
+        fn parse_test() {
+            let bin = hex::decode("02880105FF017202E7040000020EE7040000020F").unwrap();
+            let expected = Edata {
+                seoj: [0x02, 0x88, 0x01],
+                deoj: [0x05, 0xFF, 0x01],
+                esv: 0x72,
+                opc: 0x02,
+                data: vec![Property { epc: 0xE7, data: hex::decode("0000020E").unwrap() },
+                           Property { epc: 0xE7, data: hex::decode("0000020F").unwrap() }],
+            };
+            assert_eq!(Edata::parse(bin.as_slice()).unwrap(), expected);
+        }
+
+        #[test]
+        fn parse_test_less_property() {
+            let bin = hex::decode("02880105FF017202E7040000020E").unwrap();
+            assert_eq!(Edata::parse(bin.as_slice()).is_err(), true);
+        }
+    }
+
     mod property_test {
         use crate::echonet::packet::Property;
 
