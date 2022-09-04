@@ -2,7 +2,7 @@ use std::convert::TryInto;
 use std::mem;
 
 use crate::echonet::{Error, Result};
-use crate::echonet::enums::EchonetObject;
+use crate::echonet::enums::{EchonetObject, EchonetService};
 
 const ECHONET_LITE_EHD1: u8 = 0x10;
 const ECHONET_FORMAT_1: u8 = 0x81;
@@ -11,8 +11,8 @@ const ECHONET_FORMAT_1: u8 = 0x81;
 pub struct EchonetPacket {
     ehd1: u8,
     ehd2: u8,
-    tid: u16,
-    edata: Edata,
+    pub transaction_id: u16,
+    pub data: Edata,
 }
 
 #[repr(packed)]
@@ -24,9 +24,9 @@ struct EchonetPacketHeader {
 
 #[derive(PartialEq, Debug)]
 pub struct Edata {
-    seoj: EchonetObject,
-    deoj: EchonetObject,
-    esv: u8,
+    pub source_object: EchonetObject,
+    pub destination_object: EchonetObject,
+    esv: EchonetService,
     opc: u8,
     data: Vec<Property>,
 }
@@ -64,8 +64,8 @@ impl EchonetPacket {
         Ok(EchonetPacket {
             ehd1: header.ehd1,
             ehd2: header.ehd2,
-            tid: header.tid,
-            edata,
+            transaction_id: header.tid,
+            data: edata,
         })
     }
 
@@ -73,13 +73,13 @@ impl EchonetPacket {
         let header = EchonetPacketHeader {
             ehd1: self.ehd1,
             ehd2: self.ehd2,
-            tid: self.tid,
+            tid: self.transaction_id,
         };
 
         let mut bin = Vec::new();
         let header: [u8; 4] = unsafe { mem::transmute(header) };
         bin.extend(header.iter());
-        bin.extend(self.edata.dump());
+        bin.extend(self.data.dump());
         bin
     }
 }
@@ -94,9 +94,9 @@ impl Edata {
 
         let header: EdataHeader = unsafe { mem::transmute(header) };
         let mut edata = Edata {
-            seoj: header.seoj.try_into()?,
-            deoj: header.deoj.try_into()?,
-            esv: header.esv,
+            source_object: header.seoj.try_into()?,
+            destination_object: header.deoj.try_into()?,
+            esv: header.esv.try_into()?,
             opc: header.opc,
             data: Vec::new(),
         };
@@ -116,9 +116,9 @@ impl Edata {
 
     fn dump(&self) -> Vec<u8> {
         let header = EdataHeader {
-            seoj: self.seoj.into(),
-            deoj: self.deoj.into(),
-            esv: self.esv,
+            seoj: self.source_object.into(),
+            deoj: self.destination_object.into(),
+            esv: self.esv as u8,
             opc: self.opc,
         };
 
@@ -162,7 +162,7 @@ impl Property {
 #[cfg(test)]
 mod test {
     mod packet_test {
-        use crate::echonet::enums::EchonetObject;
+        use crate::echonet::enums::{EchonetObject, EchonetService};
         use crate::echonet::packet::{EchonetPacket, Edata, Property};
 
         #[test]
@@ -177,11 +177,11 @@ mod test {
             let expected = EchonetPacket {
                 ehd1: 0x10,
                 ehd2: 0x81,
-                tid,
-                edata: Edata {
-                    seoj: EchonetObject::SmartMeter,
-                    deoj: EchonetObject::HemsController,
-                    esv: 0x72,
+                transaction_id: tid,
+                data: Edata {
+                    source_object: EchonetObject::SmartMeter,
+                    destination_object: EchonetObject::HemsController,
+                    esv: EchonetService::ReadPropertyResponse,
                     opc: 0x02,
                     data: vec![Property { epc: 0xE7, data: hex::decode("0000020E").unwrap() },
                                Property { epc: 0xE7, data: hex::decode("0000020F").unwrap() }],
@@ -220,11 +220,11 @@ mod test {
             let packet = EchonetPacket {
                 ehd1: 0x10,
                 ehd2: 0x81,
-                tid,
-                edata: Edata {
-                    seoj: EchonetObject::SmartMeter,
-                    deoj: EchonetObject::HemsController,
-                    esv: 0x72,
+                transaction_id: tid,
+                data: Edata {
+                    source_object: EchonetObject::SmartMeter,
+                    destination_object: EchonetObject::HemsController,
+                    esv: EchonetService::ReadPropertyResponse,
                     opc: 0x02,
                     data: vec![Property { epc: 0xE7, data: hex::decode("0000020E").unwrap() },
                                Property { epc: 0xE7, data: hex::decode("0000020F").unwrap() }],
@@ -235,16 +235,16 @@ mod test {
     }
 
     mod edata_test {
-        use crate::echonet::enums::EchonetObject;
+        use crate::echonet::enums::{EchonetObject, EchonetService};
         use crate::echonet::packet::{Edata, Property};
 
         #[test]
         fn parse_test() {
             let bin = hex::decode("02880105FF017202E7040000020EE7040000020F").unwrap();
             let expected = Edata {
-                seoj: EchonetObject::SmartMeter,
-                deoj: EchonetObject::HemsController,
-                esv: 0x72,
+                source_object: EchonetObject::SmartMeter,
+                destination_object: EchonetObject::HemsController,
+                esv: EchonetService::ReadPropertyResponse,
                 opc: 0x02,
                 data: vec![Property { epc: 0xE7, data: hex::decode("0000020E").unwrap() },
                            Property { epc: 0xE7, data: hex::decode("0000020F").unwrap() }],
@@ -261,9 +261,9 @@ mod test {
         #[test]
         fn dump_test() {
             let data = Edata {
-                seoj: EchonetObject::SmartMeter,
-                deoj: EchonetObject::HemsController,
-                esv: 0x72,
+                source_object: EchonetObject::SmartMeter,
+                destination_object: EchonetObject::HemsController,
+                esv: EchonetService::ReadPropertyResponse,
                 opc: 0x02,
                 data: vec![Property { epc: 0xE7, data: hex::decode("0000020E").unwrap() },
                            Property { epc: 0xE7, data: hex::decode("0000020F").unwrap() }],

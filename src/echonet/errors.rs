@@ -10,7 +10,10 @@ pub enum Error {
     InvalidValueError(String),
 
     #[error("invalid echonet object id: {0}")]
-    InvalidEchonetObjectId(String),
+    InvalidEchonetObjectIdError(String),
+
+    #[error("invalid echonet servoce id: {0}")]
+    InvalidEchonetServiceError(u8),
 }
 
 impl From<TryFromSliceError> for Error {

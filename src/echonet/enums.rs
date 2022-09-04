@@ -1,4 +1,4 @@
-use num_enum::TryFromPrimitive;
+use num_enum::{TryFromPrimitive, TryFromPrimitiveError};
 use crate::echonet::{Error, Result};
 
 #[repr(u64)]
@@ -6,6 +6,17 @@ use crate::echonet::{Error, Result};
 pub enum EchonetObject {
     SmartMeter = 0x028801,
     HemsController = 0x05FF01,
+}
+
+#[repr(u8)]
+#[derive(Debug, PartialEq, TryFromPrimitive, Copy, Clone)]
+pub enum EchonetService {
+    ReadPropertyFailResponse = 0x52,
+    ReadPropertyRequest = 0x62,
+    ReadPropertyResponse = 0x72,
+    PropertyNotification = 0x73,
+    PropertyNotificationResponseRequired = 0x74,
+    PropertyNotificationResponse = 0x7A,
 }
 
 impl Into<[u8; 3]> for EchonetObject {
@@ -26,9 +37,15 @@ impl TryFrom<[u8; 3]> for EchonetObject {
         match num.try_into() {
             Ok(e) => Ok(e),
             Err(_) => {
-                return Err(Error::InvalidEchonetObjectId(format!("{:?}", value)));
+                return Err(Error::InvalidEchonetObjectIdError(format!("{:?}", value)));
             }
         }
+    }
+}
+
+impl From<TryFromPrimitiveError<EchonetService>> for Error {
+    fn from(e: TryFromPrimitiveError<EchonetService>) -> Self {
+        Error::InvalidEchonetServiceError(e.number)
     }
 }
 
