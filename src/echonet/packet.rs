@@ -26,9 +26,9 @@ struct EchonetPacketHeader {
 pub struct Edata {
     pub source_object: EchonetObject,
     pub destination_object: EchonetObject,
-    esv: EchonetService,
-    opc: u8,
-    data: Vec<Property>,
+    pub echonet_service: EchonetService,
+    property_count: u8,
+    pub properties: Vec<Property>,
 }
 
 #[repr(packed)]
@@ -96,9 +96,9 @@ impl Edata {
         let mut edata = Edata {
             source_object: header.seoj.try_into()?,
             destination_object: header.deoj.try_into()?,
-            esv: header.esv.try_into()?,
-            opc: header.opc,
-            data: Vec::new(),
+            echonet_service: header.esv.try_into()?,
+            property_count: header.opc,
+            properties: Vec::new(),
         };
 
         let mut pos = 8;
@@ -108,7 +108,7 @@ impl Edata {
             }
             let (num, prop) = Property::parse(&bin[pos..])?;
             pos += num;
-            edata.data.push(prop);
+            edata.properties.push(prop);
         }
 
         Ok(edata)
@@ -118,14 +118,14 @@ impl Edata {
         let header = EdataHeader {
             seoj: self.source_object.into(),
             deoj: self.destination_object.into(),
-            esv: self.esv as u8,
-            opc: self.opc,
+            esv: self.echonet_service as u8,
+            opc: self.property_count,
         };
 
         let header: [u8; 8] = unsafe { mem::transmute(header) };
         let mut bin = Vec::new();
         bin.extend(header.iter());
-        for d in &self.data {
+        for d in &self.properties {
             bin.extend(d.dump().iter());
         }
 
@@ -181,10 +181,10 @@ mod test {
                 data: Edata {
                     source_object: EchonetObject::SmartMeter,
                     destination_object: EchonetObject::HemsController,
-                    esv: EchonetService::ReadPropertyResponse,
-                    opc: 0x02,
-                    data: vec![Property { epc: 0xE7, data: hex::decode("0000020E").unwrap() },
-                               Property { epc: 0xE7, data: hex::decode("0000020F").unwrap() }],
+                    echonet_service: EchonetService::ReadPropertyResponse,
+                    property_count: 0x02,
+                    properties: vec![Property { epc: 0xE7, data: hex::decode("0000020E").unwrap() },
+                                     Property { epc: 0xE7, data: hex::decode("0000020F").unwrap() }],
                 },
             };
             assert_eq!(EchonetPacket::parse(bin.as_slice()).unwrap(), expected);
@@ -224,10 +224,10 @@ mod test {
                 data: Edata {
                     source_object: EchonetObject::SmartMeter,
                     destination_object: EchonetObject::HemsController,
-                    esv: EchonetService::ReadPropertyResponse,
-                    opc: 0x02,
-                    data: vec![Property { epc: 0xE7, data: hex::decode("0000020E").unwrap() },
-                               Property { epc: 0xE7, data: hex::decode("0000020F").unwrap() }],
+                    echonet_service: EchonetService::ReadPropertyResponse,
+                    property_count: 0x02,
+                    properties: vec![Property { epc: 0xE7, data: hex::decode("0000020E").unwrap() },
+                                     Property { epc: 0xE7, data: hex::decode("0000020F").unwrap() }],
                 },
             };
             assert_eq!(bin, packet.dump());
@@ -244,10 +244,10 @@ mod test {
             let expected = Edata {
                 source_object: EchonetObject::SmartMeter,
                 destination_object: EchonetObject::HemsController,
-                esv: EchonetService::ReadPropertyResponse,
-                opc: 0x02,
-                data: vec![Property { epc: 0xE7, data: hex::decode("0000020E").unwrap() },
-                           Property { epc: 0xE7, data: hex::decode("0000020F").unwrap() }],
+                echonet_service: EchonetService::ReadPropertyResponse,
+                property_count: 0x02,
+                properties: vec![Property { epc: 0xE7, data: hex::decode("0000020E").unwrap() },
+                                 Property { epc: 0xE7, data: hex::decode("0000020F").unwrap() }],
             };
             assert_eq!(Edata::parse(bin.as_slice()).unwrap(), expected);
         }
@@ -263,10 +263,10 @@ mod test {
             let data = Edata {
                 source_object: EchonetObject::SmartMeter,
                 destination_object: EchonetObject::HemsController,
-                esv: EchonetService::ReadPropertyResponse,
-                opc: 0x02,
-                data: vec![Property { epc: 0xE7, data: hex::decode("0000020E").unwrap() },
-                           Property { epc: 0xE7, data: hex::decode("0000020F").unwrap() }],
+                echonet_service: EchonetService::ReadPropertyResponse,
+                property_count: 0x02,
+                properties: vec![Property { epc: 0xE7, data: hex::decode("0000020E").unwrap() },
+                                 Property { epc: 0xE7, data: hex::decode("0000020F").unwrap() }],
             };
             let bin = hex::decode("02880105FF017202E7040000020EE7040000020F").unwrap();
             assert_eq!(data.dump(), bin);
