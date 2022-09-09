@@ -1,5 +1,14 @@
-use num_enum::{TryFromPrimitive, TryFromPrimitiveError};
+use std::fmt::Debug;
+use num_enum::{IntoPrimitive, TryFromPrimitive, TryFromPrimitiveError};
 use crate::echonet::{Error, Result};
+
+pub trait EchonetProperty: Copy + Clone + PartialEq + Debug + Sized + TryFromPrimitive<Primitive=u8> +Into<u8> {}
+
+impl<P: EchonetProperty> From<TryFromPrimitiveError<P>> for Error {
+    fn from(err: TryFromPrimitiveError<P>) -> Self {
+        Error::InvalidEchonetProperty(err.number)
+    }
+}
 
 #[repr(u64)]
 #[derive(Debug, PartialEq, TryFromPrimitive, Copy, Clone)]
@@ -9,7 +18,7 @@ pub enum EchonetObject {
 }
 
 #[repr(u8)]
-#[derive(Debug, PartialEq, TryFromPrimitive, Copy, Clone)]
+#[derive(Debug, PartialEq, TryFromPrimitive, Copy, Clone, IntoPrimitive)]
 pub enum EchonetService {
     ReadPropertyFailResponse = 0x52,
     ReadPropertyRequest = 0x62,
@@ -18,6 +27,15 @@ pub enum EchonetService {
     PropertyNotificationResponseRequired = 0x74,
     PropertyNotificationResponse = 0x7A,
 }
+
+
+#[repr(u8)]
+#[derive(Debug, PartialEq, TryFromPrimitive, IntoPrimitive, Copy, Clone)]
+pub enum EchonetSmartMeterProperty {
+    InstantaneousCurrent = 0xE7,
+}
+
+impl EchonetProperty for EchonetSmartMeterProperty {}
 
 impl Into<[u8; 3]> for EchonetObject {
     fn into(self) -> [u8; 3] {
