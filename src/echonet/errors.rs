@@ -12,8 +12,11 @@ pub enum Error {
     #[error("invalid echonet object id: {0}")]
     InvalidEchonetObjectIdError(String),
 
-    #[error("invalid echonet servoce id: {0}")]
+    #[error("invalid echonet service id: {0}")]
     InvalidEchonetServiceError(u8),
+
+    #[error("invalid echonet property id: {0}")]
+    InvalidEchonetProperty(u8),
 }
 
 impl From<TryFromSliceError> for Error {
