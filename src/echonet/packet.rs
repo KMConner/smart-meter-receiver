@@ -1,18 +1,19 @@
 use std::convert::TryInto;
+use std::fmt::Debug;
 use std::mem;
 
 use crate::echonet::{Error, Result};
-use crate::echonet::enums::{EchonetObject, EchonetService};
+use crate::echonet::enums::{EchonetObject, EchonetProperty, EchonetService};
 
 const ECHONET_LITE_EHD1: u8 = 0x10;
 const ECHONET_FORMAT_1: u8 = 0x81;
 
 #[derive(PartialEq, Debug)]
-pub struct EchonetPacket {
+pub struct EchonetPacket<P: EchonetProperty> {
     ehd1: u8,
     ehd2: u8,
     pub transaction_id: u16,
-    pub data: Edata,
+    pub data: Edata<P>,
 }
 
 #[repr(packed)]
@@ -23,12 +24,12 @@ struct EchonetPacketHeader {
 }
 
 #[derive(PartialEq, Debug)]
-pub struct Edata {
+pub struct Edata<P: EchonetProperty> {
     pub source_object: EchonetObject,
     pub destination_object: EchonetObject,
     pub echonet_service: EchonetService,
     property_count: u8,
-    pub properties: Vec<Property>,
+    pub properties: Vec<Property<P>>,
 }
 
 #[repr(packed)]
@@ -40,12 +41,12 @@ struct EdataHeader {
 }
 
 #[derive(PartialEq, Debug)]
-pub struct Property {
-    epc: u8,
+pub struct Property<P: EchonetProperty> {
+    epc: P,
     data: Vec<u8>,
 }
 
-impl EchonetPacket {
+impl<P: EchonetProperty> EchonetPacket<P> {
     pub fn parse(bin: &[u8]) -> Result<Self> {
         if bin.len() < 4 {
             return Err(Error::ParseError(String::from("data length too short")));
@@ -84,7 +85,7 @@ impl EchonetPacket {
     }
 }
 
-impl Edata {
+impl<P: EchonetProperty> Edata<P> {
     fn parse(bin: &[u8]) -> Result<Self> {
         if bin.len() < 8 {
             return Err(Error::ParseError(String::from("data length too short")));
@@ -133,13 +134,15 @@ impl Edata {
     }
 }
 
-impl Property {
+impl<P: EchonetProperty> Property<P> {
     fn parse(bin: &[u8]) -> Result<(usize, Self)> {
         if bin.len() < 2 {
             return Err(Error::ParseError(String::from("empty data")));
         }
 
-        let epc = bin[0];
+        let b = bin[0];
+
+        let epc: P = P::try_from_primitive(b)?;
         let pdc = bin[1] as usize;
         if bin.len() < 2 + pdc {
             return Err(Error::ParseError(String::from("less data length")));
@@ -151,7 +154,7 @@ impl Property {
 
     fn dump(&self) -> Vec<u8> {
         let mut data = Vec::with_capacity(self.data.len() + 2);
-        data.push(self.epc);
+        data.push(self.epc.into());
         data.push(self.data.len() as u8);
         data.extend_from_slice(self.data.as_slice());
 
@@ -161,9 +164,17 @@ impl Property {
 
 #[cfg(test)]
 mod test {
+    use crate::echonet::{EchonetPacket, Edata, Property};
+    use crate::echonet::enums::EchonetSmartMeterProperty;
+
+    type SmartMeterPacket = EchonetPacket<EchonetSmartMeterProperty>;
+    type SmartMeterProperty = Property<EchonetSmartMeterProperty>;
+    type SmartMeterEdata = Edata<EchonetSmartMeterProperty>;
+
     mod packet_test {
-        use crate::echonet::enums::{EchonetObject, EchonetService};
+        use crate::echonet::enums::{EchonetObject, EchonetService, EchonetSmartMeterProperty};
         use crate::echonet::packet::{EchonetPacket, Edata, Property};
+        use crate::echonet::packet::test::SmartMeterPacket;
 
         #[test]
         fn parse_test() {
@@ -183,8 +194,8 @@ mod test {
                     destination_object: EchonetObject::HemsController,
                     echonet_service: EchonetService::ReadPropertyResponse,
                     property_count: 0x02,
-                    properties: vec![Property { epc: 0xE7, data: hex::decode("0000020E").unwrap() },
-                                     Property { epc: 0xE7, data: hex::decode("0000020F").unwrap() }],
+                    properties: vec![Property { epc: EchonetSmartMeterProperty::InstantaneousCurrent, data: hex::decode("0000020E").unwrap() },
+                                     Property { epc: EchonetSmartMeterProperty::InstantaneousCurrent, data: hex::decode("0000020F").unwrap() }],
                 },
             };
             assert_eq!(EchonetPacket::parse(bin.as_slice()).unwrap(), expected);
@@ -193,19 +204,19 @@ mod test {
         #[test]
         fn parse_invalid_ehd1() {
             let bin = hex::decode("1181000102880105FF017202E7040000020EE7040000020F").unwrap();
-            assert_eq!(EchonetPacket::parse(bin.as_slice()).is_err(), true);
+            assert_eq!(SmartMeterPacket::parse(bin.as_slice()).is_err(), true);
         }
 
         #[test]
         fn parse_invalid_ehd2() {
             let bin = hex::decode("1082000102880105FF017202E7040000020EE7040000020F").unwrap();
-            assert_eq!(EchonetPacket::parse(bin.as_slice()).is_err(), true);
+            assert_eq!(SmartMeterPacket::parse(bin.as_slice()).is_err(), true);
         }
 
         #[test]
         fn parse_error_too_short_1() {
             let bin = hex::decode("10810001").unwrap();
-            assert_eq!(EchonetPacket::parse(bin.as_slice()).is_err(), true);
+            assert_eq!(SmartMeterPacket::parse(bin.as_slice()).is_err(), true);
         }
 
         #[test]
@@ -217,7 +228,7 @@ mod test {
                 let tid = 0x0100;
 
             let bin = hex::decode("1081000102880105FF017202E7040000020EE7040000020F").unwrap();
-            let packet = EchonetPacket {
+            let packet: EchonetPacket<EchonetSmartMeterProperty> = EchonetPacket {
                 ehd1: 0x10,
                 ehd2: 0x81,
                 transaction_id: tid,
@@ -226,8 +237,16 @@ mod test {
                     destination_object: EchonetObject::HemsController,
                     echonet_service: EchonetService::ReadPropertyResponse,
                     property_count: 0x02,
-                    properties: vec![Property { epc: 0xE7, data: hex::decode("0000020E").unwrap() },
-                                     Property { epc: 0xE7, data: hex::decode("0000020F").unwrap() }],
+                    properties: vec![Property {
+                        epc: EchonetSmartMeterProperty::InstantaneousCurrent,
+                        data: hex::decode(
+                            "0000020E").unwrap(),
+                    },
+                                     Property {
+                                         epc: EchonetSmartMeterProperty::InstantaneousCurrent,
+                                         data: hex::decode(
+                                             "0000020F").unwrap(),
+                                     }],
                 },
             };
             assert_eq!(bin, packet.dump());
@@ -235,8 +254,9 @@ mod test {
     }
 
     mod edata_test {
-        use crate::echonet::enums::{EchonetObject, EchonetService};
+        use crate::echonet::enums::{EchonetObject, EchonetService, EchonetSmartMeterProperty};
         use crate::echonet::packet::{Edata, Property};
+        use crate::echonet::packet::test::SmartMeterEdata;
 
         #[test]
         fn parse_test() {
@@ -246,8 +266,8 @@ mod test {
                 destination_object: EchonetObject::HemsController,
                 echonet_service: EchonetService::ReadPropertyResponse,
                 property_count: 0x02,
-                properties: vec![Property { epc: 0xE7, data: hex::decode("0000020E").unwrap() },
-                                 Property { epc: 0xE7, data: hex::decode("0000020F").unwrap() }],
+                properties: vec![Property { epc: EchonetSmartMeterProperty::InstantaneousCurrent, data: hex::decode("0000020E").unwrap() },
+                                 Property { epc: EchonetSmartMeterProperty::InstantaneousCurrent, data: hex::decode("0000020F").unwrap() }],
             };
             assert_eq!(Edata::parse(bin.as_slice()).unwrap(), expected);
         }
@@ -255,7 +275,7 @@ mod test {
         #[test]
         fn parse_test_less_property() {
             let bin = hex::decode("02880105FF017202E7040000020E").unwrap();
-            assert_eq!(Edata::parse(bin.as_slice()).is_err(), true);
+            assert_eq!(SmartMeterEdata::parse(bin.as_slice()).is_err(), true);
         }
 
         #[test]
@@ -265,8 +285,8 @@ mod test {
                 destination_object: EchonetObject::HemsController,
                 echonet_service: EchonetService::ReadPropertyResponse,
                 property_count: 0x02,
-                properties: vec![Property { epc: 0xE7, data: hex::decode("0000020E").unwrap() },
-                                 Property { epc: 0xE7, data: hex::decode("0000020F").unwrap() }],
+                properties: vec![Property { epc: EchonetSmartMeterProperty::InstantaneousCurrent, data: hex::decode("0000020E").unwrap() },
+                                 Property { epc: EchonetSmartMeterProperty::InstantaneousCurrent, data: hex::decode("0000020F").unwrap() }],
             };
             let bin = hex::decode("02880105FF017202E7040000020EE7040000020F").unwrap();
             assert_eq!(data.dump(), bin);
@@ -274,12 +294,14 @@ mod test {
     }
 
     mod property_test {
+        use crate::echonet::enums::EchonetSmartMeterProperty;
         use crate::echonet::packet::Property;
+        use crate::echonet::packet::test::SmartMeterProperty;
 
         #[test]
         fn parse_test_1() {
             let bin = hex::decode("E7040000020E").unwrap();
-            let expected = Property { epc: 0xE7, data: hex::decode("0000020E").unwrap() };
+            let expected = Property { epc: EchonetSmartMeterProperty::InstantaneousCurrent, data: hex::decode("0000020E").unwrap() };
             let (actual, data) = Property::parse(bin.as_slice()).unwrap();
             assert_eq!(data, expected);
             assert_eq!(actual, 6);
@@ -288,7 +310,7 @@ mod test {
         #[test]
         fn parse_test_2() {
             let bin = hex::decode("E7040000020EE704000FF20E").unwrap();
-            let expected = Property { epc: 0xE7, data: hex::decode("0000020E").unwrap() };
+            let expected = Property { epc: EchonetSmartMeterProperty::InstantaneousCurrent, data: hex::decode("0000020E").unwrap() };
             let (actual, data) = Property::parse(bin.as_slice()).unwrap();
             assert_eq!(data, expected);
             assert_eq!(actual, 6);
@@ -297,19 +319,19 @@ mod test {
         #[test]
         fn parse_error_on_empty() {
             let bin = hex::decode("").unwrap();
-            assert_eq!(Property::parse(bin.as_slice()).is_err(), true);
+            assert_eq!(SmartMeterProperty::parse(bin.as_slice()).is_err(), true);
         }
 
         #[test]
         fn parse_error_on_insufficient_length() {
             let bin = hex::decode("E704000002").unwrap();
-            assert_eq!(Property::parse(bin.as_slice()).is_err(), true);
+            assert_eq!(SmartMeterProperty::parse(bin.as_slice()).is_err(), true);
         }
 
         #[test]
         fn dump_test() {
             let bin = hex::decode("E7040000020E").unwrap();
-            let property = Property { epc: 0xE7, data: hex::decode("0000020E").unwrap() };
+            let property = Property { epc: EchonetSmartMeterProperty::InstantaneousCurrent, data: hex::decode("0000020E").unwrap() };
             assert_eq!(bin, property.dump());
         }
     }
