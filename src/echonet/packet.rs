@@ -172,12 +172,12 @@ impl<P: EchonetProperty> Property<P> {
         data
     }
 
-    pub fn get_i64(&self) -> Option<i64> {
-        let bin: [u8; 8] = match self.data.clone().try_into() {
+    pub fn get_i32(&self) -> Option<i32> {
+        let bin: [u8; 4] = match self.data.clone().try_into() {
             Ok(b) => b,
             Err(_) => { return None; }
         };
-        Some(i64::from_be_bytes(bin))
+        Some(i32::from_be_bytes(bin))
     }
 }
 

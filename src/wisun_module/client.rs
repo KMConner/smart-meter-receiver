@@ -261,7 +261,7 @@ impl<T: Connection> WiSunClient<T> {
         ip.into()
     }
 
-    pub fn get_power_consumption(&mut self) -> Result<i64> {
+    pub fn get_power_consumption(&mut self) -> Result<i32> {
         let transaction_id = rand::random();
         let packet = EchonetPacket::new(transaction_id, Edata {
             source_object: EchonetObject::HemsController,
@@ -286,7 +286,7 @@ impl<T: Connection> WiSunClient<T> {
             p.get_property(EchonetSmartMeterProperty::InstantaneousCurrent).is_some()
         }, Duration::from_secs(20))?;
 
-        let property = match packet.get_property(EchonetSmartMeterProperty::InstantaneousCurrent).map(|p| p.get_i64()) {
+        let property = match packet.get_property(EchonetSmartMeterProperty::InstantaneousCurrent).map(|p| p.get_i32()) {
             Some(Some(p)) => p,
             Some(None) => {
                 return Err(Error::CommandError("malformed property".to_string()));
