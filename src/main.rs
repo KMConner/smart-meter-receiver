@@ -7,6 +7,8 @@ mod wisun_module;
 
 use crate::wisun_module::WiSunClient;
 use std::env;
+use std::thread::sleep;
+use std::time::Duration;
 use simplelog::{ColorChoice, CombinedLogger, Config, LevelFilter, TermLogger, TerminalMode};
 
 fn main() {
@@ -23,4 +25,10 @@ fn main() {
     let bid = env::var("WISUN_BID").expect("BID MUST BE specified with WISUN_BID");
     let password = env::var("WISUN_PASSWORD").expect("Password MUST BE specified with WISUN_PASSWORD");
     cli.connect(bid.as_str(), password.as_str()).unwrap();
+
+    loop {
+        let watt = cli.get_power_consumption().unwrap();
+        log::info!("Power consumption: {}W",watt);
+        sleep(Duration::from_secs(10));
+    }
 }
