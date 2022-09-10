@@ -1,13 +1,12 @@
 use std::io;
 use std::net::Ipv6Addr;
-use std::ops::ControlFlow::Continue;
 use std::thread::sleep;
 
 use std::time::{Duration, SystemTime};
 use crate::echonet::{EchonetObject, EchonetPacket, EchonetProperty, EchonetService, EchonetSmartMeterProperty, Edata, Property};
 
 use crate::parser::{Parser, ParseResult, SerialMessage, WiSunEvent, WiSunModuleParser};
-use crate::parser::event::{EventKind, PanDescBody, UdpPacket};
+use crate::parser::event::{EventKind, PanDescBody};
 use crate::serial::{Connection, Error as SerialError};
 use crate::wisun_module::errors::{Error, Result};
 
