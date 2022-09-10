@@ -52,15 +52,6 @@ impl<T: Connection> WiSunClient<T> {
                         }
                     }
                 }
-                Err(SerialError::SerialError(ioe)) => {
-                    if let serialport::ErrorKind::Io(e) = ioe.kind {
-                        if e == io::ErrorKind::TimedOut {
-                            continue;
-                        }
-                        return Err(Error::SerialError(SerialError::SerialError(ioe)));
-                    }
-                    return Err(Error::SerialError(SerialError::SerialError(ioe)));
-                }
                 Err(SerialError::IoError(ioe)) => {
                     if ioe.kind() == io::ErrorKind::TimedOut {
                         continue;
