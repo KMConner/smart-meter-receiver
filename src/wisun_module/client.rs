@@ -340,7 +340,7 @@ impl<T: Connection> WiSunClient<T> {
 }
 
 fn create_send_udp_base(addr: &Ipv6Addr, security_bit: u8, data_length: usize) -> String {
-    format!("SKSENDTO 1 {} {:04X} {} {:04X}", ipv6_addr_full_string(addr), ECHONET_PORT, security_bit, data_length)
+    format!("SKSENDTO 1 {} {:04X} {} {:04X} ", ipv6_addr_full_string(addr), ECHONET_PORT, security_bit, data_length)
 }
 
 fn err_when_fail(m: &SerialMessage) -> Option<String> {
@@ -593,6 +593,6 @@ mod test {
         let addr = Ipv6Addr::from_str("FE80:0000:0000:0000:1234:5678:90AB:CDEF").unwrap();
 
         assert_eq!(create_send_udp_base(&addr, 1, 30),
-                   "SKSENDTO 1 FE80:0000:0000:0000:1234:5678:90AB:CDEF 0E1A 1 001E");
+                   "SKSENDTO 1 FE80:0000:0000:0000:1234:5678:90AB:CDEF 0E1A 1 001E ");
     }
 }
