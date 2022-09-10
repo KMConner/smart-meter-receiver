@@ -28,7 +28,6 @@ pub struct Edata<P: EchonetProperty> {
     pub source_object: EchonetObject,
     pub destination_object: EchonetObject,
     pub echonet_service: EchonetService,
-    property_count: u8,
     pub properties: Vec<Property<P>>,
 }
 
@@ -42,11 +41,20 @@ struct EdataHeader {
 
 #[derive(PartialEq, Debug)]
 pub struct Property<P: EchonetProperty> {
-    epc: P,
-    data: Vec<u8>,
+    pub epc: P,
+    pub data: Vec<u8>,
 }
 
 impl<P: EchonetProperty> EchonetPacket<P> {
+    pub fn new(transaction_id: u16, data: Edata<P>) -> Self {
+        Self {
+            ehd1: ECHONET_LITE_EHD1,
+            ehd2: ECHONET_FORMAT_1,
+            transaction_id,
+            data,
+        }
+    }
+
     pub fn parse(bin: &[u8]) -> Result<Self> {
         if bin.len() < 4 {
             return Err(Error::ParseError(String::from("data length too short")));
@@ -83,6 +91,10 @@ impl<P: EchonetProperty> EchonetPacket<P> {
         bin.extend(self.data.dump());
         bin
     }
+
+    pub fn get_property(&self, prop: P) -> Option<&Property<P>> {
+        self.data.properties.iter().find(|ep| ep.epc == prop)
+    }
 }
 
 impl<P: EchonetProperty> Edata<P> {
@@ -98,7 +110,6 @@ impl<P: EchonetProperty> Edata<P> {
             source_object: header.seoj.try_into()?,
             destination_object: header.deoj.try_into()?,
             echonet_service: header.esv.try_into()?,
-            property_count: header.opc,
             properties: Vec::new(),
         };
 
@@ -120,7 +131,7 @@ impl<P: EchonetProperty> Edata<P> {
             seoj: self.source_object.into(),
             deoj: self.destination_object.into(),
             esv: self.echonet_service as u8,
-            opc: self.property_count,
+            opc: self.properties.len() as u8,
         };
 
         let header: [u8; 8] = unsafe { mem::transmute(header) };
@@ -160,6 +171,14 @@ impl<P: EchonetProperty> Property<P> {
 
         data
     }
+
+    pub fn get_i64(&self) -> Option<i64> {
+        let bin: [u8; 8] = match self.data.clone().try_into() {
+            Ok(b) => b,
+            Err(_) => { return None; }
+        };
+        Some(i64::from_be_bytes(bin))
+    }
 }
 
 #[cfg(test)]
@@ -193,7 +212,6 @@ mod test {
                     source_object: EchonetObject::SmartMeter,
                     destination_object: EchonetObject::HemsController,
                     echonet_service: EchonetService::ReadPropertyResponse,
-                    property_count: 0x02,
                     properties: vec![Property { epc: EchonetSmartMeterProperty::InstantaneousCurrent, data: hex::decode("0000020E").unwrap() },
                                      Property { epc: EchonetSmartMeterProperty::InstantaneousCurrent, data: hex::decode("0000020F").unwrap() }],
                 },
@@ -236,7 +254,6 @@ mod test {
                     source_object: EchonetObject::SmartMeter,
                     destination_object: EchonetObject::HemsController,
                     echonet_service: EchonetService::ReadPropertyResponse,
-                    property_count: 0x02,
                     properties: vec![Property {
                         epc: EchonetSmartMeterProperty::InstantaneousCurrent,
                         data: hex::decode(
@@ -265,7 +282,6 @@ mod test {
                 source_object: EchonetObject::SmartMeter,
                 destination_object: EchonetObject::HemsController,
                 echonet_service: EchonetService::ReadPropertyResponse,
-                property_count: 0x02,
                 properties: vec![Property { epc: EchonetSmartMeterProperty::InstantaneousCurrent, data: hex::decode("0000020E").unwrap() },
                                  Property { epc: EchonetSmartMeterProperty::InstantaneousCurrent, data: hex::decode("0000020F").unwrap() }],
             };
@@ -284,7 +300,6 @@ mod test {
                 source_object: EchonetObject::SmartMeter,
                 destination_object: EchonetObject::HemsController,
                 echonet_service: EchonetService::ReadPropertyResponse,
-                property_count: 0x02,
                 properties: vec![Property { epc: EchonetSmartMeterProperty::InstantaneousCurrent, data: hex::decode("0000020E").unwrap() },
                                  Property { epc: EchonetSmartMeterProperty::InstantaneousCurrent, data: hex::decode("0000020F").unwrap() }],
             };
