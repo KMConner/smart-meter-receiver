@@ -1,9 +1,11 @@
 use std::io;
 use std::net::Ipv6Addr;
+use std::ops::ControlFlow::Continue;
 use std::time::{Duration, SystemTime};
+use crate::echonet::{EchonetObject, EchonetPacket, EchonetProperty, EchonetService, EchonetSmartMeterProperty, Edata, Property};
 
 use crate::parser::{Parser, ParseResult, SerialMessage, WiSunEvent, WiSunModuleParser};
-use crate::parser::event::{EventKind, PanDescBody};
+use crate::parser::event::{EventKind, PanDescBody, UdpPacket};
 use crate::serial::{Connection, Error as SerialError};
 use crate::wisun_module::errors::{Error, Result};
 
@@ -256,6 +258,45 @@ impl<T: Connection> WiSunClient<T> {
         ip.into()
     }
 
+    pub fn get_power_consumption(&mut self) -> Result<i64> {
+        let transaction_id = rand::random();
+        let packet = EchonetPacket::new(transaction_id, Edata {
+            source_object: EchonetObject::HemsController,
+            destination_object: EchonetObject::SmartMeter,
+            echonet_service: EchonetService::ReadPropertyRequest,
+            properties: vec![
+                Property {
+                    epc: EchonetSmartMeterProperty::InstantaneousCurrent,
+                    data: Vec::new(),
+                }
+            ],
+        });
+        self.send_udp(packet.dump().as_slice())?;
+        self.wait_ok()?;
+        let packet = self.wait_echonet_packet(|p: &EchonetPacket<EchonetSmartMeterProperty>| -> bool{
+            if p.transaction_id != transaction_id {
+                return false;
+            }
+            let edata = &p.data;
+            if edata.destination_object != EchonetObject::HemsController || edata.source_object != EchonetObject::SmartMeter {
+                return false;
+            }
+            p.get_property(EchonetSmartMeterProperty::InstantaneousCurrent).is_some()
+        }, Duration::from_secs(20))?;
+
+        let property = match packet.get_property(EchonetSmartMeterProperty::InstantaneousCurrent).map(|p| p.get_i64()) {
+            Some(Some(p)) => p,
+            Some(None) => {
+                return Err(Error::CommandError("malformed property".to_string()));
+            }
+            None => {
+                return Err(Error::CommandError("unknown error".to_string()));
+            }
+        };
+
+        Ok(property)
+    }
+
     fn send_udp(&mut self, data: &[u8]) -> Result<()> {
         let addr = match self.address {
             Some(a) => a,
@@ -273,6 +314,28 @@ impl<T: Connection> WiSunClient<T> {
 
         self.serial_connection.write_byte(bin.as_slice())?;
         self.wait_ok()
+    }
+
+    fn wait_echonet_packet<F, P: EchonetProperty>(&mut self, pred: F, timeout: Duration) -> Result<EchonetPacket<P>>
+        where F: Fn(&EchonetPacket<P>) -> bool {
+        let msg = self.wait_fn(|m| -> bool{
+            match m {
+                SerialMessage::Event(WiSunEvent::RxUdp(p)) => {
+                    match EchonetPacket::parse(p.data.as_slice()) {
+                        Ok(e) => pred(&e),
+                        Err(e) => {
+                            log::warn!("failed to parse packet: {:?} packet: {}",e, hex::encode(p.data.as_slice()));
+                            false
+                        }
+                    }
+                }
+                _ => false,
+            }
+        }, err_when_fail, Some(timeout))?;
+        if let SerialMessage::Event(WiSunEvent::RxUdp(p)) = msg {
+            return Ok(EchonetPacket::parse(p.data.as_slice())?);
+        }
+        return Err(Error::CommandError("Unknown error".to_string()));
     }
 }
 
