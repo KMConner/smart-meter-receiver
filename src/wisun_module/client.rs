@@ -1,6 +1,8 @@
 use std::io;
 use std::net::Ipv6Addr;
 use std::ops::ControlFlow::Continue;
+use std::thread::sleep;
+
 use std::time::{Duration, SystemTime};
 use crate::echonet::{EchonetObject, EchonetPacket, EchonetProperty, EchonetService, EchonetSmartMeterProperty, Edata, Property};
 
@@ -129,6 +131,7 @@ impl<T: Connection> WiSunClient<T> {
                     }
                 }
             }
+            sleep(Duration::from_millis(50));
         }
     }
 
@@ -272,7 +275,6 @@ impl<T: Connection> WiSunClient<T> {
             ],
         });
         self.send_udp(packet.dump().as_slice())?;
-        self.wait_ok()?;
         let packet = self.wait_echonet_packet(|p: &EchonetPacket<EchonetSmartMeterProperty>| -> bool{
             if p.transaction_id != transaction_id {
                 return false;
