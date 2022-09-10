@@ -9,6 +9,8 @@ pub enum Error {
     CommandError(String),
     #[error("failed to scan pan: {0}")]
     ScanError(String),
+    #[error(transparent)]
+    PacketParseError(#[from] crate::echonet::Error),
     #[error("timeout")]
     TimeoutError(),
 }
