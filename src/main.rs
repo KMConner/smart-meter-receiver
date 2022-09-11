@@ -27,8 +27,14 @@ fn main() {
     cli.connect(bid.as_str(), password.as_str()).unwrap();
 
     loop {
-        let watt = cli.get_power_consumption().unwrap();
-        log::info!("Power consumption: {}W",watt);
+        match cli.get_power_consumption() {
+            Ok(w) => {
+                log::info!("Power consumption: {}W",w);
+            }
+            Err(e) => {
+                log::warn!("failed to retrieve power consumption: {:?}",e);
+            }
+        }
         sleep(Duration::from_secs(10));
     }
 }
