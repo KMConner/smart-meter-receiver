@@ -1,4 +1,3 @@
-use std::io;
 use std::net::Ipv6Addr;
 use std::thread::sleep;
 
@@ -53,9 +52,6 @@ impl<T: Connection> WiSunClient<T> {
                     }
                 }
                 Err(SerialError::IoError(ioe)) => {
-                    if ioe.kind() == io::ErrorKind::TimedOut {
-                        continue;
-                    }
                     return Err(Error::SerialError(SerialError::IoError(ioe)));
                 }
                 Err(e) => {
@@ -111,15 +107,23 @@ impl<T: Connection> WiSunClient<T> {
                 }
                 None => {}
             }
-            if self.get_message()? {
-                if let Some(m) = self.message_buffer.last() {
-                    if pred(m) {
-                        return Ok(self.message_buffer.remove(self.message_buffer.len() - 1));
-                    }
-                    if let Some(e) = err_if(m) {
-                        return Err(Error::CommandError(e));
+            match self.get_message() {
+                Ok(true) => {
+                    if let Some(m) = self.message_buffer.last() {
+                        if pred(m) {
+                            return Ok(self.message_buffer.remove(self.message_buffer.len() - 1));
+                        }
+                        if let Some(e) = err_if(m) {
+                            return Err(Error::CommandError(e));
+                        }
                     }
                 }
+                Err(Error::SerialError(SerialError::IoError(ioe))) => {
+                    if ioe.kind() == std::io::ErrorKind::TimedOut {
+                        continue;
+                    }
+                }
+                _ => { continue; }
             }
             sleep(Duration::from_millis(50));
         }
