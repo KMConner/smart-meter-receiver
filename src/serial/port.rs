@@ -1,8 +1,5 @@
 use super::traits::ReadWrite;
-use crate::serial::buffer::Buffer;
-use crate::serial::errors::Result;
-use crate::serial::wrapper::Wrapper;
-use crate::serial::Connection;
+use crate::serial::{buffer::Buffer, errors::Result, wrapper::Wrapper, Connection};
 use std::time::Duration;
 
 struct ConnectionImpl<T: ReadWrite> {
@@ -28,6 +25,14 @@ impl<T: ReadWrite> Connection for ConnectionImpl<T> {
         self.connection.write(b"\r\n")?;
         self.connection.flush()?;
         log::trace!("Serial Input: {}", line);
+        Ok(())
+    }
+
+    fn write_byte(&mut self, data: &[u8]) -> Result<()> {
+        self.connection.write(data)?;
+        self.connection.write(b"\r\n")?;
+        self.connection.flush()?;
+        log::trace!("Serial Input(byte): {}", hex::encode(data));
         Ok(())
     }
 
@@ -74,10 +79,10 @@ mod test {
     use super::*;
     use crate::serial::mock_serial::MockReadWrite;
 
-    fn new_conn<'a>(
+    fn new_conn(
         buf_size: usize,
-        read_data: Vec<&'a [u8]>,
-    ) -> ConnectionImpl<MockReadWrite<'a>> {
+        read_data: Vec<&[u8]>,
+    ) -> ConnectionImpl<MockReadWrite> {
         let mock = MockReadWrite::new(read_data);
 
         ConnectionImpl {
