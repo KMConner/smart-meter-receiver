@@ -2,7 +2,7 @@ use std::net::Ipv6Addr;
 use std::thread::sleep;
 
 use std::time::{Duration, SystemTime};
-use crate::echonet::{EchonetObject, EchonetPacket, EchonetProperty, EchonetService, EchonetSmartMeterProperty, Edata, Property};
+use crate::echonet::{EchonetObject, EchonetPacket, EchonetProperty, EchonetService, EchonetSmartMeterProperty, EchonetSuperClassProperty, Edata, Property, PropertyMap};
 
 use crate::parser::{Parser, ParseResult, SerialMessage, WiSunEvent, WiSunModuleParser};
 use crate::parser::event::{EventKind, PanDescBody};
@@ -255,21 +255,18 @@ impl<T: Connection> WiSunClient<T> {
         ip.into()
     }
 
-    pub fn get_power_consumption(&mut self) -> Result<i32> {
+    fn get_properties<P: EchonetProperty>(&mut self, props: &[P]) -> Result<EchonetPacket<P>> {
         let transaction_id = rand::random();
         let packet = EchonetPacket::new(transaction_id, Edata {
             source_object: EchonetObject::HemsController,
             destination_object: EchonetObject::SmartMeter,
             echonet_service: EchonetService::ReadPropertyRequest,
-            properties: vec![
-                Property {
-                    epc: EchonetSmartMeterProperty::InstantaneousCurrent,
-                    data: Vec::new(),
-                }
-            ],
+            properties: props.iter()
+                .map(|p| Property { epc: *p, data: Vec::new() })
+                .collect(),
         });
-        self.send_udp(packet.dump().as_slice())?;
-        let packet = self.wait_echonet_packet(|p: &EchonetPacket<EchonetSmartMeterProperty>| -> bool{
+        self.send_udp(&packet.dump())?;
+        let packet = self.wait_echonet_packet(|p: &EchonetPacket<P>| -> bool{
             if p.transaction_id != transaction_id {
                 return false;
             }
@@ -277,10 +274,16 @@ impl<T: Connection> WiSunClient<T> {
             if edata.destination_object != EchonetObject::HemsController || edata.source_object != EchonetObject::SmartMeter {
                 return false;
             }
-            p.get_property(EchonetSmartMeterProperty::InstantaneousCurrent).is_some()
+            true
         }, Duration::from_secs(20))?;
 
-        let property = match packet.get_property(EchonetSmartMeterProperty::InstantaneousCurrent).map(|p| p.get_i32()) {
+        Ok(packet)
+    }
+
+    pub fn get_power_consumption(&mut self) -> Result<i32> {
+        let packet = self.get_properties(&[EchonetSmartMeterProperty::InstantaneousElectricPower])?;
+
+        let property = match packet.get_property(EchonetSmartMeterProperty::InstantaneousElectricPower).map(|p| p.get_i32()) {
             Some(Some(p)) => p,
             Some(None) => {
                 return Err(Error::CommandError("malformed property".to_string()));
@@ -291,6 +294,18 @@ impl<T: Connection> WiSunClient<T> {
         };
 
         Ok(property)
+    }
+
+    pub fn get_property_map(&mut self) -> Result<PropertyMap> {
+        let prop = self.get_properties(&[EchonetSuperClassProperty::GetPropertyMap])?
+            .get_property(EchonetSuperClassProperty::GetPropertyMap)
+            .map(|p| PropertyMap::parse(&p.data));
+
+        match prop {
+            Some(Ok(m)) => Ok(m),
+            Some(Err(e)) => Err(e.into()),
+            None => Err(Error::CommandError("property not found".to_string()))
+        }
     }
 
     fn send_udp(&mut self, data: &[u8]) -> Result<()> {

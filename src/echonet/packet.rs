@@ -212,8 +212,8 @@ mod test {
                     source_object: EchonetObject::SmartMeter,
                     destination_object: EchonetObject::HemsController,
                     echonet_service: EchonetService::ReadPropertyResponse,
-                    properties: vec![Property { epc: EchonetSmartMeterProperty::InstantaneousCurrent, data: hex::decode("0000020E").unwrap() },
-                                     Property { epc: EchonetSmartMeterProperty::InstantaneousCurrent, data: hex::decode("0000020F").unwrap() }],
+                    properties: vec![Property { epc: EchonetSmartMeterProperty::InstantaneousElectricPower, data: hex::decode("0000020E").unwrap() },
+                                     Property { epc: EchonetSmartMeterProperty::InstantaneousElectricPower, data: hex::decode("0000020F").unwrap() }],
                 },
             };
             assert_eq!(EchonetPacket::parse(bin.as_slice()).unwrap(), expected);
@@ -255,12 +255,12 @@ mod test {
                     destination_object: EchonetObject::HemsController,
                     echonet_service: EchonetService::ReadPropertyResponse,
                     properties: vec![Property {
-                        epc: EchonetSmartMeterProperty::InstantaneousCurrent,
+                        epc: EchonetSmartMeterProperty::InstantaneousElectricPower,
                         data: hex::decode(
                             "0000020E").unwrap(),
                     },
                                      Property {
-                                         epc: EchonetSmartMeterProperty::InstantaneousCurrent,
+                                         epc: EchonetSmartMeterProperty::InstantaneousElectricPower,
                                          data: hex::decode(
                                              "0000020F").unwrap(),
                                      }],
@@ -282,8 +282,8 @@ mod test {
                 source_object: EchonetObject::SmartMeter,
                 destination_object: EchonetObject::HemsController,
                 echonet_service: EchonetService::ReadPropertyResponse,
-                properties: vec![Property { epc: EchonetSmartMeterProperty::InstantaneousCurrent, data: hex::decode("0000020E").unwrap() },
-                                 Property { epc: EchonetSmartMeterProperty::InstantaneousCurrent, data: hex::decode("0000020F").unwrap() }],
+                properties: vec![Property { epc: EchonetSmartMeterProperty::InstantaneousElectricPower, data: hex::decode("0000020E").unwrap() },
+                                 Property { epc: EchonetSmartMeterProperty::InstantaneousElectricPower, data: hex::decode("0000020F").unwrap() }],
             };
             assert_eq!(Edata::parse(bin.as_slice()).unwrap(), expected);
         }
@@ -300,8 +300,8 @@ mod test {
                 source_object: EchonetObject::SmartMeter,
                 destination_object: EchonetObject::HemsController,
                 echonet_service: EchonetService::ReadPropertyResponse,
-                properties: vec![Property { epc: EchonetSmartMeterProperty::InstantaneousCurrent, data: hex::decode("0000020E").unwrap() },
-                                 Property { epc: EchonetSmartMeterProperty::InstantaneousCurrent, data: hex::decode("0000020F").unwrap() }],
+                properties: vec![Property { epc: EchonetSmartMeterProperty::InstantaneousElectricPower, data: hex::decode("0000020E").unwrap() },
+                                 Property { epc: EchonetSmartMeterProperty::InstantaneousElectricPower, data: hex::decode("0000020F").unwrap() }],
             };
             let bin = hex::decode("02880105FF017202E7040000020EE7040000020F").unwrap();
             assert_eq!(data.dump(), bin);
@@ -316,7 +316,7 @@ mod test {
         #[test]
         fn parse_test_1() {
             let bin = hex::decode("E7040000020E").unwrap();
-            let expected = Property { epc: EchonetSmartMeterProperty::InstantaneousCurrent, data: hex::decode("0000020E").unwrap() };
+            let expected = Property { epc: EchonetSmartMeterProperty::InstantaneousElectricPower, data: hex::decode("0000020E").unwrap() };
             let (actual, data) = Property::parse(bin.as_slice()).unwrap();
             assert_eq!(data, expected);
             assert_eq!(actual, 6);
@@ -325,7 +325,7 @@ mod test {
         #[test]
         fn parse_test_2() {
             let bin = hex::decode("E7040000020EE704000FF20E").unwrap();
-            let expected = Property { epc: EchonetSmartMeterProperty::InstantaneousCurrent, data: hex::decode("0000020E").unwrap() };
+            let expected = Property { epc: EchonetSmartMeterProperty::InstantaneousElectricPower, data: hex::decode("0000020E").unwrap() };
             let (actual, data) = Property::parse(bin.as_slice()).unwrap();
             assert_eq!(data, expected);
             assert_eq!(actual, 6);
@@ -346,7 +346,7 @@ mod test {
         #[test]
         fn dump_test() {
             let bin = hex::decode("E7040000020E").unwrap();
-            let property = Property { epc: EchonetSmartMeterProperty::InstantaneousCurrent, data: hex::decode("0000020E").unwrap() };
+            let property = Property { epc: EchonetSmartMeterProperty::InstantaneousElectricPower, data: hex::decode("0000020E").unwrap() };
             assert_eq!(bin, property.dump());
         }
     }
