@@ -179,6 +179,14 @@ impl<P: EchonetProperty> Property<P> {
         };
         Some(i32::from_be_bytes(bin))
     }
+
+    pub fn get_u32(&self) -> Option<u32> {
+        let bin: [u8; 4] = match self.data.clone().try_into() {
+            Ok(b) => b,
+            Err(_) => { return None; }
+        };
+        Some(u32::from_be_bytes(bin))
+    }
 }
 
 #[cfg(test)]

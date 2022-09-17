@@ -2,6 +2,7 @@ use std::net::Ipv6Addr;
 use std::thread::sleep;
 
 use std::time::{Duration, SystemTime};
+use mockall::predicate::str::starts_with;
 use crate::echonet::{EchonetObject, EchonetPacket, EchonetProperty, EchonetService, EchonetSmartMeterProperty, EchonetSuperClassProperty, Edata, Property, PropertyMap};
 
 use crate::parser::{Parser, ParseResult, SerialMessage, WiSunEvent, WiSunModuleParser};
@@ -306,6 +307,53 @@ impl<T: Connection> WiSunClient<T> {
             Some(Err(e)) => Err(e.into()),
             None => Err(Error::CommandError("property not found".to_string()))
         }
+    }
+
+    pub fn get_cumulative_electric_energy(&mut self) -> Result<f64> {
+        let props = self.get_properties(
+            &[EchonetSmartMeterProperty::NormalDirectionCumulativeElectricEnergy,
+                EchonetSmartMeterProperty::UnitForCumulativeElectricEnergy,
+                EchonetSmartMeterProperty::Coefficient])?;
+
+        let base = match props.get_property(EchonetSmartMeterProperty::NormalDirectionCumulativeElectricEnergy).map(|p| p.get_u32()) {
+            Some(Some(p)) => p,
+            Some(None) => {
+                return Err(Error::CommandError("malformed property".to_string()));
+            }
+            None => {
+                return Err(Error::CommandError("unknown error".to_string()));
+            }
+        };
+        let unit = match props.get_property(EchonetSmartMeterProperty::UnitForCumulativeElectricEnergy).map(|p| p.data[0]) {
+            Some(0x00) => 1.0,
+            Some(0x01) => 0.1,
+            Some(0x02) => 0.01,
+            Some(0x03) => 0.001,
+            Some(0x04) => 0.0001,
+            Some(0x0A) => 10.0,
+            Some(0x0B) => 100.0,
+            Some(0x0C) => 1000.0,
+            Some(0x0D) => 10000.0,
+            None => {
+                return Err(Error::CommandError("unknown error".to_string()));
+            }
+            Some(b) => {
+                return Err(Error::CommandError(format!("unexpected unit {:X}", b)));
+            }
+        };
+
+        let coefficient = match props.get_property(EchonetSmartMeterProperty::Coefficient).map(|p| p.get_u32()) {
+            Some(Some(p)) => p,
+            Some(None) => {
+                return Err(Error::CommandError("malformed property".to_string()));
+            }
+            None => {
+                return Err(Error::CommandError("unknown error".to_string()));
+            }
+        };
+        log::debug!("base: {}, unit: {}, coefficient: {}",base,unit,coefficient);
+
+        Ok((base as f64) * unit * (coefficient as f64))
     }
 
     fn send_udp(&mut self, data: &[u8]) -> Result<()> {

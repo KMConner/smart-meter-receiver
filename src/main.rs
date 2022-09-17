@@ -37,6 +37,14 @@ fn main() {
                 log::warn!("failed to retrieve power consumption: {:?}",e);
             }
         }
+        match cli.get_cumulative_electric_energy() {
+            Ok(w) => {
+                log::info!("Cumulative Power consumption: {}W",w);
+            }
+            Err(e) => {
+                log::warn!("failed to retrieve power consumption: {:?}",e);
+            }
+        }
         sleep(Duration::from_secs(10));
     }
 }
