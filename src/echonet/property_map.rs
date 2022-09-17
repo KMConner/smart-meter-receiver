@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use crate::echonet::{EchonetProperty, Error};
 use super::errors::Result;
+use std::result::Result as StdResult;
 
 struct PropertyMap {
     properties: HashSet<u8>,
@@ -45,6 +46,11 @@ impl PropertyMap {
 
     pub fn has_property(&self, prop: impl EchonetProperty) -> bool {
         self.properties.contains(&prop.into())
+    }
+
+    pub fn get_properties<P: EchonetProperty>(&self) -> Vec<P> {
+        self.properties.iter()
+            .map(Clone::clone).map(P::try_from_primitive).filter_map(StdResult::ok).collect()
     }
 }
 
