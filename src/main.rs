@@ -39,10 +39,10 @@ fn main() {
         }
         match cli.get_cumulative_electric_energy() {
             Ok(w) => {
-                log::info!("Cumulative Power consumption: {}W",w);
+                log::info!("Cumulative Power consumption: {:.2}kWh",w);
             }
             Err(e) => {
-                log::warn!("failed to retrieve power consumption: {:?}",e);
+                log::warn!("failed to retrieve Cumulative power consumption: {:?}",e);
             }
         }
         sleep(Duration::from_secs(10));

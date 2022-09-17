@@ -2,7 +2,6 @@ use std::net::Ipv6Addr;
 use std::thread::sleep;
 
 use std::time::{Duration, SystemTime};
-use mockall::predicate::str::starts_with;
 use crate::echonet::{EchonetObject, EchonetPacket, EchonetProperty, EchonetService, EchonetSmartMeterProperty, EchonetSuperClassProperty, Edata, Property, PropertyMap};
 
 use crate::parser::{Parser, ParseResult, SerialMessage, WiSunEvent, WiSunModuleParser};
