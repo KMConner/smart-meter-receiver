@@ -35,6 +35,12 @@ pub enum EchonetSmartMeterProperty {
     InstantaneousCurrent = 0xE7,
 }
 
+#[repr(u8)]
+#[derive(Debug, PartialEq, TryFromPrimitive, IntoPrimitive, Copy, Clone)]
+pub enum EchonetSuperClassProperty {
+    GetPropertyMap = 0x9F,
+}
+
 impl EchonetProperty for EchonetSmartMeterProperty {}
 
 impl Into<[u8; 3]> for EchonetObject {
