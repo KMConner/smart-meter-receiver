@@ -3,6 +3,7 @@ use crate::echonet::{EchonetProperty, Error};
 use super::errors::Result;
 use std::result::Result as StdResult;
 
+#[derive(Debug)]
 pub struct PropertyMap {
     properties: HashSet<u8>,
 }
