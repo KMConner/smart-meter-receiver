@@ -285,6 +285,10 @@ impl<T: Connection> WiSunClient<T> {
     }
 
     fn check_property_exists<P: EchonetProperty>(&self, props: &[P]) -> Result<()> {
+        if props.len() == 1 && props[0].into() == EchonetSuperClassProperty::GetPropertyMap.into() {
+            return Ok(());
+        }
+
         let map = match &self.property_map {
             Some(m) => m,
             None => {
