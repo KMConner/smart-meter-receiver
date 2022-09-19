@@ -125,7 +125,7 @@ impl<T: Connection> WiSunClient<T> {
                 }
                 _ => { continue; }
             }
-            sleep(Duration::from_millis(50));
+            sleep(Duration::from_millis(1));
         }
     }
 
