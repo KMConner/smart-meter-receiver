@@ -16,6 +16,7 @@ pub struct WiSunClient<T: Connection> {
     serial_parser: WiSunModuleParser,
     message_buffer: Vec<SerialMessage>,
     address: Option<Ipv6Addr>,
+    property_map: Option<PropertyMap>,
 }
 
 impl<T: Connection> WiSunClient<T> {
@@ -25,6 +26,7 @@ impl<T: Connection> WiSunClient<T> {
             serial_parser: WiSunModuleParser::new(),
             message_buffer: Vec::new(),
             address: None,
+            property_map: None,
         };
         client.ensure_echoback_off()?;
         Ok(client)
@@ -167,6 +169,7 @@ impl<T: Connection> WiSunClient<T> {
         let ip = self.get_ip(&pan.addr);
         self.join(&ip)?;
         self.address = Some(ip);
+        self.get_property_map()?;
         Ok(())
     }
 
@@ -256,6 +259,7 @@ impl<T: Connection> WiSunClient<T> {
     }
 
     fn get_properties<P: EchonetProperty>(&mut self, props: &[P]) -> Result<EchonetPacket<P>> {
+        self.check_property_exists(props)?;
         let transaction_id = rand::random();
         let packet = EchonetPacket::new(transaction_id, Edata {
             source_object: EchonetObject::HemsController,
@@ -280,6 +284,21 @@ impl<T: Connection> WiSunClient<T> {
         Ok(packet)
     }
 
+    fn check_property_exists<P: EchonetProperty>(&self, props: &[P]) -> Result<()> {
+        let map = match &self.property_map {
+            Some(m) => m,
+            None => {
+                return Err(Error::CommandError(String::from("property map is not initialized.")));
+            }
+        };
+        for p in props {
+            if !map.has_property(*p) {
+                return Err(Error::CommandError(format!("Property {:?} is not implemented.", p)));
+            }
+        }
+        Ok(())
+    }
+
     pub fn get_power_consumption(&mut self) -> Result<i32> {
         let packet = self.get_properties(&[EchonetSmartMeterProperty::InstantaneousElectricPower])?;
 
@@ -296,13 +315,17 @@ impl<T: Connection> WiSunClient<T> {
         Ok(property)
     }
 
-    pub fn get_property_map(&mut self) -> Result<PropertyMap> {
+    pub fn get_property_map(&mut self) -> Result<()> {
         let prop = self.get_properties(&[EchonetSuperClassProperty::GetPropertyMap])?
             .get_property(EchonetSuperClassProperty::GetPropertyMap)
             .map(|p| PropertyMap::parse(&p.data));
 
         match prop {
-            Some(Ok(m)) => Ok(m),
+            Some(Ok(m)) => {
+                log::debug!("property id list: {:X?}", m.get_property_ids());
+                self.property_map = Some(m);
+                Ok(())
+            }
             Some(Err(e)) => Err(e.into()),
             None => Err(Error::CommandError("property not found".to_string()))
         }
@@ -436,6 +459,7 @@ mod test {
             serial_parser: WiSunModuleParser::new(),
             message_buffer: Vec::new(),
             address: None,
+            property_map: None,
         }
     }
 
