@@ -2,10 +2,14 @@ name: Release binary
 
 on:
   push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
 
 jobs:
   test:
     runs-on: ubuntu-22.04
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v3
       - uses: actions/cache@v2
@@ -30,3 +34,7 @@ jobs:
         run: |
           rustup target add armv7-unknown-linux-musleabihf
           cargo build --target=armv7-unknown-linux-musleabihf --release
+      - uses: ncipollo/release-action@v1
+        with:
+          artifacts: "target/armv7-unknown-linux-musleabihf/release/smart_meter_receiver"
+          makeLatest: true
