@@ -18,7 +18,8 @@ fn main() {
         TerminalMode::Mixed,
         ColorChoice::Auto,
     )]).unwrap();
-    let conn = serial::new("/dev/ttyS0", 115200).unwrap();
+    let device = std::env::var("SERIAL_PORT").unwrap_or("/dev/ttyS0".to_string());
+    let conn = serial::new(&device, 115200).unwrap();
     let mut cli = WiSunClient::new(conn).unwrap();
     let version = cli.get_version().unwrap();
     println!("Version: {}", version);
