@@ -25,6 +25,8 @@ fn main() {
     let bid = env::var("WISUN_BID").expect("BID MUST BE specified with WISUN_BID");
     let password = env::var("WISUN_PASSWORD").expect("Password MUST BE specified with WISUN_PASSWORD");
     cli.connect(bid.as_str(), password.as_str()).unwrap();
+    let property_map = cli.get_property_map().unwrap();
+    println!("{:?}", property_map);
 
     loop {
         match cli.get_power_consumption() {
@@ -33,6 +35,14 @@ fn main() {
             }
             Err(e) => {
                 log::warn!("failed to retrieve power consumption: {:?}",e);
+            }
+        }
+        match cli.get_cumulative_electric_energy() {
+            Ok(w) => {
+                log::info!("Cumulative Power consumption: {:.2}kWh",w);
+            }
+            Err(e) => {
+                log::warn!("failed to retrieve Cumulative power consumption: {:?}",e);
             }
         }
         sleep(Duration::from_secs(10));
