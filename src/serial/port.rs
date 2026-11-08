@@ -20,17 +20,16 @@ fn trim_line_end(text_u8: &[u8]) -> &[u8] {
 
 impl<T: ReadWrite> Connection for ConnectionImpl<T> {
     fn write_line(&mut self, line: &str) -> Result<()> {
-        let binary = line.as_bytes();
-        self.connection.write(binary)?;
-        self.connection.write(b"\r\n")?;
+        self.connection.write_all(line.as_bytes())?;
+        self.connection.write_all(b"\r\n")?;
         self.connection.flush()?;
         log::trace!("Serial Input: {}", line);
         Ok(())
     }
 
     fn write_byte(&mut self, data: &[u8]) -> Result<()> {
-        self.connection.write(data)?;
-        self.connection.write(b"\r\n")?;
+        self.connection.write_all(data)?;
+        self.connection.write_all(b"\r\n")?;
         self.connection.flush()?;
         log::trace!("Serial Input(byte): {}", hex::encode(data));
         Ok(())
