@@ -5,11 +5,15 @@ use std::time::{Duration, SystemTime};
 use crate::echonet::{EchonetObject, EchonetPacket, EchonetProperty, EchonetService, EchonetSmartMeterProperty, EchonetSuperClassProperty, Edata, Property, PropertyMap};
 
 use crate::parser::{Parser, ParseResult, SerialMessage, WiSunEvent, WiSunModuleParser};
-use crate::parser::event::{EventKind, PanDescBody};
+use crate::parser::event::{udp_send_result, EventKind, PanDescBody};
 use crate::serial::{Connection, Error as SerialError};
 use crate::wisun_module::errors::{Error, Result};
 
 const ECHONET_PORT: u16 = 3610;
+// The dual-stack SKSTACK IP firmware (BP35C0 in RS-WSUHA-P) takes a SIDE argument that selects
+// the B-route (0) or the HAN (1) interface; this client only talks to the smart meter over B-route.
+const B_ROUTE_SIDE: u8 = 0;
+const UDP_SEND_ATTEMPTS: u32 = 3;
 
 pub struct WiSunClient<T: Connection> {
     serial_connection: T,
@@ -47,8 +51,8 @@ impl<T: Connection> WiSunClient<T> {
                         ParseResult::More => {
                             continue;
                         }
-                        ParseResult::Err(_) => {
-                            // TODO: logging
+                        ParseResult::Err(line) => {
+                            log::warn!("ignored a line the parser could not read: {}", line);
                             continue;
                         }
                     }
@@ -57,8 +61,7 @@ impl<T: Connection> WiSunClient<T> {
                     return Err(Error::SerialError(SerialError::IoError(ioe)));
                 }
                 Err(e) => {
-                    log::debug!("{:?}", e);
-
+                    log::warn!("failed to read a line from the module: {:?}", e);
                     return Err(Error::SerialError(e));
                 }
             }
@@ -191,7 +194,7 @@ impl<T: Connection> WiSunClient<T> {
         for i in 4..10 {
             // Start scanning -> Wait for scan finish -> Look for EPANDESC
             self.flush_messages();
-            let line = format!("SKSCAN 2 FFFFFFFF {}", i);
+            let line = format!("SKSCAN 2 FFFFFFFF {} {}", i, B_ROUTE_SIDE);
             self.serial_connection.write_line(line.as_str())?;
             self.wait_ok()?;
             self.wait_fn(|m| -> bool{
@@ -350,20 +353,23 @@ impl<T: Connection> WiSunClient<T> {
                 return Err(Error::CommandError("unknown error".to_string()));
             }
         };
-        let unit = match props.get_property(EchonetSmartMeterProperty::UnitForCumulativeElectricEnergy).map(|p| p.data[0]) {
-            Some(0x00) => 1.0,
-            Some(0x01) => 0.1,
-            Some(0x02) => 0.01,
-            Some(0x03) => 0.001,
-            Some(0x04) => 0.0001,
-            Some(0x0A) => 10.0,
-            Some(0x0B) => 100.0,
-            Some(0x0C) => 1000.0,
-            Some(0x0D) => 10000.0,
+        let unit = match props.get_property(EchonetSmartMeterProperty::UnitForCumulativeElectricEnergy).map(|p| p.data.first().copied()) {
+            Some(Some(0x00)) => 1.0,
+            Some(Some(0x01)) => 0.1,
+            Some(Some(0x02)) => 0.01,
+            Some(Some(0x03)) => 0.001,
+            Some(Some(0x04)) => 0.0001,
+            Some(Some(0x0A)) => 10.0,
+            Some(Some(0x0B)) => 100.0,
+            Some(Some(0x0C)) => 1000.0,
+            Some(Some(0x0D)) => 10000.0,
+            Some(None) => {
+                return Err(Error::CommandError("malformed property".to_string()));
+            }
             None => {
                 return Err(Error::CommandError("unknown error".to_string()));
             }
-            Some(b) => {
+            Some(Some(b)) => {
                 return Err(Error::CommandError(format!("unexpected unit {:X}", b)));
             }
         };
@@ -382,7 +388,19 @@ impl<T: Connection> WiSunClient<T> {
         Ok((base as f64) * unit * (coefficient as f64))
     }
 
+    // Right after PANA authentication the first send often fails transiently, so retry a few times.
     fn send_udp(&mut self, data: &[u8]) -> Result<()> {
+        for attempt in 1..=UDP_SEND_ATTEMPTS {
+            if self.try_send_udp(data)? {
+                return Ok(());
+            }
+            log::warn!("UDP send failed (attempt {}/{})", attempt, UDP_SEND_ATTEMPTS);
+        }
+        Err(Error::CommandError(format!("UDP send failed {} times", UDP_SEND_ATTEMPTS)))
+    }
+
+    // Returns whether the module reported the packet as delivered (EVENT 21 with SUCCEEDED).
+    fn try_send_udp(&mut self, data: &[u8]) -> Result<bool> {
         let addr = match self.address {
             Some(a) => a,
             None => {
@@ -398,7 +416,14 @@ impl<T: Connection> WiSunClient<T> {
         bin.extend_from_slice("\r\n".as_bytes());
 
         self.serial_connection.write_byte(bin.as_slice())?;
-        self.wait_ok()
+        self.wait_ok()?;
+        // The module may print EVENT 21 before OK; wait_fn also looks at messages buffered meanwhile.
+        let finished = self.wait_fn(|m| matches!(m,
+            SerialMessage::Event(WiSunEvent::Event(e))
+                if e.kind == EventKind::FinishedUdpSend && e.param != Some(udp_send_result::NEIGHBOR_SOLICITATION)
+        ), err_when_fail, Some(Duration::from_secs(10)))?;
+        Ok(matches!(finished,
+            SerialMessage::Event(WiSunEvent::Event(e)) if e.param == Some(udp_send_result::SUCCEEDED)))
     }
 
     fn wait_echonet_packet<F, P: EchonetProperty>(&mut self, pred: F, timeout: Duration) -> Result<EchonetPacket<P>>
@@ -425,7 +450,7 @@ impl<T: Connection> WiSunClient<T> {
 }
 
 fn create_send_udp_base(addr: &Ipv6Addr, security_bit: u8, data_length: usize) -> String {
-    format!("SKSENDTO 1 {} {:04X} {} {:04X} ", ipv6_addr_full_string(addr), ECHONET_PORT, security_bit, data_length)
+    format!("SKSENDTO 1 {} {:04X} {} {} {:04X} ", ipv6_addr_full_string(addr), ECHONET_PORT, security_bit, B_ROUTE_SIDE, data_length)
 }
 
 fn err_when_fail(m: &SerialMessage) -> Option<String> {
@@ -546,6 +571,49 @@ mod test {
         }
     }
 
+    mod send_udp_test {
+        use std::collections::VecDeque;
+
+        use crate::wisun_module::client::UDP_SEND_ATTEMPTS;
+
+        use super::*;
+
+        const METER: &str = "FE80:0000:0000:0000:0280:8700:3013:7DAB";
+
+        fn client_replying(sends: usize, replies: Vec<String>) -> WiSunClient<MockSerial> {
+            let mut cli = new_client(|s| {
+                let mut queue = VecDeque::from(replies.clone());
+                s.expect_write_byte().times(sends).returning(|_| Ok(()));
+                s.expect_read_line().returning(move || Ok(queue.pop_front().unwrap()));
+            });
+            cli.address = Some(METER.parse().unwrap());
+            cli
+        }
+
+        #[test]
+        fn retries_after_failed_send() {
+            let mut cli = client_replying(2, vec![
+                format!("EVENT 21 {} 0 01", METER),
+                String::from("OK"),
+                // second attempt: neighbor solicitation first, then the real result
+                format!("EVENT 21 {} 0 02", METER),
+                String::from("OK"),
+                format!("EVENT 21 {} 0 00", METER),
+            ]);
+            cli.send_udp(&[0x10, 0x81]).unwrap();
+        }
+
+        #[test]
+        fn gives_up_after_all_attempts_fail() {
+            let attempts = UDP_SEND_ATTEMPTS as usize;
+            let replies = (0..attempts)
+                .flat_map(|_| [format!("EVENT 21 {} 0 01", METER), String::from("OK")])
+                .collect();
+            let mut cli = client_replying(attempts, replies);
+            assert!(cli.send_udp(&[0x10, 0x81]).is_err());
+        }
+    }
+
     mod get_version_test {
         use mockall::{predicate, Sequence};
 
@@ -616,7 +684,7 @@ mod test {
             let mut seq = Sequence::new();
             let mut cli = new_client(|s| {
                 s.expect_write_line()
-                    .with(predicate::eq("SKSCAN 2 FFFFFFFF 4"))
+                    .with(predicate::eq("SKSCAN 2 FFFFFFFF 4 0"))
                     .times(1)
                     .in_sequence(&mut seq)
                     .returning(|_| Ok(()));
@@ -628,7 +696,7 @@ mod test {
                     .returning(|| Ok("EVENT 22 FE80:0000:0000:0000:1234:5678:90AB:CDEF".to_string()));
 
                 s.expect_write_line()
-                    .with(predicate::eq("SKSCAN 2 FFFFFFFF 5"))
+                    .with(predicate::eq("SKSCAN 2 FFFFFFFF 5 0"))
                     .times(1)
                     .in_sequence(&mut seq)
                     .returning(|_| Ok(()));
@@ -655,6 +723,9 @@ mod test {
                     .returning(|| Ok(String::from("  LQI:73")));
                 s.expect_read_line()
                     .times(1)
+                    .returning(|| Ok(String::from("  Side:0")));
+                s.expect_read_line()
+                    .times(1)
                     .returning(|| Ok(String::from("  PairID:01234567")));
                 s.expect_read_line()
                     .times(1)
@@ -679,6 +750,6 @@ mod test {
         let addr = Ipv6Addr::from_str("FE80:0000:0000:0000:1234:5678:90AB:CDEF").unwrap();
 
         assert_eq!(create_send_udp_base(&addr, 1, 30),
-                   "SKSENDTO 1 FE80:0000:0000:0000:1234:5678:90AB:CDEF 0E1A 1 001E ");
+                   "SKSENDTO 1 FE80:0000:0000:0000:1234:5678:90AB:CDEF 0E1A 1 0 001E ");
     }
 }

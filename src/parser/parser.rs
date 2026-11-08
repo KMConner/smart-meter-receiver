@@ -68,6 +68,7 @@ mod test {
         let even_body = EventBody {
             kind: EventKind::EstablishedPanaConnection,
             sender: "FE80:0000:0000:0000:1234:5678:90AB:CDEF".parse().unwrap(),
+            param: None,
         };
         assert_eq!(
             parser.add_line("EVENT 25 FE80:0000:0000:0000:1234:5678:90AB:CDEF"),
@@ -90,6 +91,7 @@ mod test {
         assert_eq!(parser.add_line("  Pan ID:3077"), ParseResult::More);
         assert_eq!(parser.add_line("  Addr:1234567890ABCDEF"), ParseResult::More);
         assert_eq!(parser.add_line("  LQI:73"), ParseResult::More);
+        assert_eq!(parser.add_line("  Side:0"), ParseResult::More);
         assert_eq!(
             parser.add_line("  PairID:01234567"),
             ParseResult::Ok(

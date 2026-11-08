@@ -11,8 +11,8 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/cache@v2
+      - uses: actions/checkout@v7
+      - uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry
@@ -28,8 +28,8 @@ jobs:
       - name: configure linker
         run: |
           mkdir .cargo
-          echo "[target.armv7-unknown-linux-musleabihf]" >> .cargo/config
-          echo 'linker = "arm-linux-gnueabihf-gcc-12"' >> .cargo/config
+          echo "[target.armv7-unknown-linux-musleabihf]" >> .cargo/config.toml
+          echo 'linker = "arm-linux-gnueabihf-gcc-12"' >> .cargo/config.toml
       - name: Build
         run: |
           rustup target add armv7-unknown-linux-musleabihf
