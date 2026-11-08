@@ -11,13 +11,13 @@ lto = true
 opt-level = "z"
 
 [dev-dependencies]
-mockall = "0.11.1"
+mockall = "0.15.0"
 
 [dependencies]
-serialport = "4.0.1"
-thiserror = "1.0"
-num_enum = "0.5.7"
+serialport = "4.10.1"
+thiserror = "2.0.21"
+num_enum = "0.7.6"
 hex = "0.4.3"
-log = "0.4.17"
-simplelog = "0.12.0"
-rand = "0.8.5"
+log = "0.4.35"
+simplelog = "0.12.2"
+rand = "0.10.3"

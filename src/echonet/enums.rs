@@ -2,7 +2,7 @@ use std::fmt::Debug;
 use num_enum::{IntoPrimitive, TryFromPrimitive, TryFromPrimitiveError};
 use crate::echonet::{Error, Result};
 
-pub trait EchonetProperty: Copy + Clone + PartialEq + Debug + Sized + TryFromPrimitive<Primitive=u8> + Into<u8> {}
+pub trait EchonetProperty: Copy + Clone + PartialEq + Debug + Sized + TryFromPrimitive<Primitive=u8, Error=TryFromPrimitiveError<Self>> + Into<u8> {}
 
 impl<P: EchonetProperty> From<TryFromPrimitiveError<P>> for Error {
     fn from(err: TryFromPrimitiveError<P>) -> Self {
