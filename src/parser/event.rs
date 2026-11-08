@@ -35,7 +35,15 @@ pub enum EventKind {
 pub struct EventBody {
     pub kind: EventKind,
     pub sender: Ipv6Addr,
-    // TODO: Add param if necessary
+    // Only some events carry it; for FinishedUdpSend it is the send result (see udp_send_result).
+    pub param: Option<u8>,
+}
+
+// PARAM of EVENT 21. 0x01 means the send failed.
+pub mod udp_send_result {
+    pub const SUCCEEDED: u8 = 0x00;
+    // Neighbor solicitation was sent; the final SUCCEEDED or FAILED follows in another EVENT 21.
+    pub const NEIGHBOR_SOLICITATION: u8 = 0x02;
 }
 
 #[derive(Debug, PartialEq)]
@@ -46,19 +54,29 @@ pub struct PanDescBody {
 }
 
 impl WiSunEvent {
+    // EVENT <NUM> <SENDER> <SIDE> [<PARAM>]
     fn parse_event(data: &str, parts: Vec<&str>) -> ParseResult<Self> {
+        if parts.len() < 3 {
+            return ParseResult::Err(format!("Malformed event line: {}", data));
+        }
         let event_num = match u8::from_str_radix(parts[1], 16) {
             Ok(i) => i,
             Err(_) => return ParseResult::Err(format!("Malformed event number. Line: {}", data))
         };
+        let param = match parts.get(4).map(|p| u8::from_str_radix(p, 16)) {
+            None => None,
+            Some(Ok(p)) => Some(p),
+            Some(Err(_)) => return ParseResult::Err(format!("Malformed event param. Line: {}", data)),
+        };
         match (EventKind::try_from(event_num), parts[2].parse()) {
-            (Ok(k), Ok(ip)) => ParseResult::Ok(WiSunEvent::Event(EventBody { kind: k, sender: ip })),
+            (Ok(kind), Ok(sender)) => ParseResult::Ok(WiSunEvent::Event(EventBody { kind, sender, param })),
             _ => ParseResult::Err(String::from(data))
         }
     }
 
     fn parse_rx_udp(data: &str, parts: Vec<&str>) -> ParseResult<Self> {
-        if parts.len() != 9 {
+        // ERXUDP <SENDER> <DEST> <RPORT> <LPORT> <SENDERLLA> <SECURED> <SIDE> <DATALEN> <DATA>
+        if parts.len() != 10 {
             return ParseResult::Err(String::from(data));
         }
 
@@ -72,15 +90,15 @@ impl WiSunEvent {
             _ => return ParseResult::Err(String::from(data)),
         };
 
-        let data_len = match u16::from_str_radix(parts[7], 16) {
+        let data_len = match u16::from_str_radix(parts[8], 16) {
             Ok(l) => l,
             _ => return ParseResult::Err(String::from(data)),
         };
 
-        if data_len as usize * 2 != parts[8].len() {
+        if data_len as usize * 2 != parts[9].len() {
             return ParseResult::Err(String::from(data));
         }
-        let body = match hex::decode(parts[8]) {
+        let body = match hex::decode(parts[9]) {
             Ok(b) => b,
             _ => return ParseResult::Err(String::from(data)),
         };
@@ -109,7 +127,8 @@ impl WiSunEvent {
             pan_data.insert(kv[0], kv[1]);
         }
 
-        if pan_data.len() < 6 {
+        // Channel, Channel Page, Pan ID, Addr, LQI, Side, PairID
+        if pan_data.len() < 7 {
             return ParseResult::More;
         }
 
@@ -204,7 +223,7 @@ mod test {
             ],
         };
         assert_eq!(
-            WiSunEvent::parse("ERXUDP FE80:0000:0000:0000:1234:5678:1234:5678 FE80:0000:0000:0000:1234:5678:90AB:CDEF 0E1A 0E1A C0F9450040213077 1 0012 108100000EF0010EF0017301D50401028801"),
+            WiSunEvent::parse("ERXUDP FE80:0000:0000:0000:1234:5678:1234:5678 FE80:0000:0000:0000:1234:5678:90AB:CDEF 0E1A 0E1A C0F9450040213077 1 0 0012 108100000EF0010EF0017301D50401028801"),
             ParseResult::Ok(WiSunEvent::RxUdp(udp_packet))
         );
     }
@@ -214,11 +233,17 @@ mod test {
         let even_body = EventBody {
             kind: EventKind::FinishedUdpSend,
             sender: "FE80:0000:0000:0000:1234:5678:90AB:CDEF".parse().unwrap(),
+            param: Some(0x01),
         };
         assert_eq!(
-            WiSunEvent::parse("EVENT 21 FE80:0000:0000:0000:1234:5678:90AB:CDEF 02"),
+            WiSunEvent::parse("EVENT 21 FE80:0000:0000:0000:1234:5678:90AB:CDEF 0 01"),
             ParseResult::Ok(WiSunEvent::Event(even_body))
         );
+    }
+
+    #[test]
+    fn parse_truncated_event() {
+        assert_eq!(discriminant(&WiSunEvent::parse("EVENT 21")), discriminant(&ParseResult::Err(String::new())));
     }
 
     #[test]
@@ -226,9 +251,10 @@ mod test {
         let even_body = EventBody {
             kind: EventKind::FinishedActiveScan,
             sender: "FE80:0000:0000:0000:1234:5678:90AB:CDEF".parse().unwrap(),
+            param: None,
         };
         assert_eq!(
-            WiSunEvent::parse("EVENT 22 FE80:0000:0000:0000:1234:5678:90AB:CDEF 02"),
+            WiSunEvent::parse("EVENT 22 FE80:0000:0000:0000:1234:5678:90AB:CDEF 0"),
             ParseResult::Ok(WiSunEvent::Event(even_body))
         );
     }
@@ -243,9 +269,10 @@ mod test {
         let even_body = EventBody {
             kind: EventKind::ErrorOnPanaConnection,
             sender: "FE80:0000:0000:0000:1234:5678:90AB:CDEF".parse().unwrap(),
+            param: None,
         };
         assert_eq!(
-            WiSunEvent::parse("EVENT 24 FE80:0000:0000:0000:1234:5678:90AB:CDEF"),
+            WiSunEvent::parse("EVENT 24 FE80:0000:0000:0000:1234:5678:90AB:CDEF 0"),
             ParseResult::Ok(WiSunEvent::Event(even_body))
         );
     }
@@ -255,9 +282,10 @@ mod test {
         let even_body = EventBody {
             kind: EventKind::EstablishedPanaConnection,
             sender: "FE80:0000:0000:0000:1234:5678:90AB:CDEF".parse().unwrap(),
+            param: None,
         };
         assert_eq!(
-            WiSunEvent::parse("EVENT 25 FE80:0000:0000:0000:1234:5678:90AB:CDEF"),
+            WiSunEvent::parse("EVENT 25 FE80:0000:0000:0000:1234:5678:90AB:CDEF 0"),
             ParseResult::Ok(WiSunEvent::Event(even_body))
         );
     }
@@ -294,7 +322,12 @@ mod test {
 
     #[test]
     fn parse_pan_desc_7_lines() {
-        assert_eq!(WiSunEvent::parse("EPANDESC\n  Channel:20\n  Channel Page:09\n  Pan ID:3077\n  Addr:1234567890ABCDEF\n  LQI:73\n  PairID:01234567"),
+        assert_eq!(WiSunEvent::parse("EPANDESC\n  Channel:2F\n  Channel Page:09\n  Pan ID:3077\n  Addr:C0F9450040213077\n  LQI:73\n  Side:0"), ParseResult::More);
+    }
+
+    #[test]
+    fn parse_pan_desc_8_lines() {
+        assert_eq!(WiSunEvent::parse("EPANDESC\n  Channel:20\n  Channel Page:09\n  Pan ID:3077\n  Addr:1234567890ABCDEF\n  LQI:73\n  Side:0\n  PairID:01234567"),
                    ParseResult::Ok(WiSunEvent::PanDesc(PanDescBody {
                        channel: 0x20,
                        pan_id: 0x3077,
